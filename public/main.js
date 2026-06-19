@@ -1371,6 +1371,7 @@ export function initWorld(currentUser) {
 
   // ─── INPUT ────────────────────────────────────────────────────────────────
   const keys = {}, chatInput = document.getElementById('chat-input');
+  const joystick = { dx: 0, dz: 0 };
 
   addEventListener('keydown', e => {
     if (document.activeElement === chatInput) return;
@@ -1436,7 +1437,8 @@ export function initWorld(currentUser) {
     const d = new THREE.Vector3();
     if (keys.w) d.z -= 1; if (keys.s) d.z += 1;
     if (keys.a) d.x -= 1; if (keys.d) d.x += 1;
-    const m = d.lengthSq() > 0;
+    d.x += joystick.dx; d.z += joystick.dz;
+    const m = d.lengthSq() > 0.01;
     if (m) {
       d.normalize();
       player.position.addScaledVector(d, (keys.shift ? 7.8 : 4.6) * dt);
@@ -1490,7 +1492,10 @@ export function initWorld(currentUser) {
   }
   function nearUI() {
     const n = nearest();
-    document.getElementById('nearby').textContent = n && n.dist < 3.8 ? `Рядом: ${n.p.name} — нажмите E` : 'Подойдите к объекту';
+    const isNear = n && n.dist < 3.8;
+    document.getElementById('nearby').textContent = isNear ? `Рядом: ${n.p.name}` : 'Подойдите к объекту';
+    const mb = document.getElementById('mobile-open-btn');
+    if (mb) mb.classList.toggle('hidden', !isNear);
   }
 
   // ─── CAMERA — orbit with right-click drag ────────────────────────────────
@@ -1516,21 +1521,69 @@ export function initWorld(currentUser) {
     _rLastX = e.clientX; _rLastY = e.clientY;
   });
 
-  // Two-finger drag on touch → orbit
-  let _tPrev = null;
+  // Touch: one-finger drag on canvas → orbit; two-finger drag → orbit
+  let _tPrev = null, _tSingle = null, _tSingleMoved = false;
   renderer.domElement.addEventListener('touchstart', e => {
-    if (e.touches.length === 2)
+    _rMoved = false;
+    if (e.touches.length === 2) {
+      _tSingle = null;
       _tPrev = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+    } else if (e.touches.length === 1) {
+      _tSingle = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      _tSingleMoved = false;
+    }
   }, { passive: true });
   window.addEventListener('touchmove', e => {
-    if (!_tPrev || e.touches.length !== 2) return;
-    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    camYaw   -= (cx - _tPrev.x) * 0.007;
-    camPitch  = Math.max(0.10, Math.min(1.35, camPitch + (cy - _tPrev.y) * 0.005));
-    _tPrev = { x: cx, y: cy };
+    if (e.touches.length === 2 && _tPrev) {
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      camYaw   -= (cx - _tPrev.x) * 0.007;
+      camPitch  = Math.max(0.10, Math.min(1.35, camPitch + (cy - _tPrev.y) * 0.005));
+      _tPrev = { x: cx, y: cy };
+    } else if (e.touches.length === 1 && _tSingle) {
+      const dx = e.touches[0].clientX - _tSingle.x;
+      const dy = e.touches[0].clientY - _tSingle.y;
+      if (!_tSingleMoved && Math.hypot(dx, dy) > 8) _tSingleMoved = true;
+      if (_tSingleMoved) {
+        _rMoved = true;
+        camYaw   -= dx * 0.007;
+        camPitch  = Math.max(0.10, Math.min(1.35, camPitch + dy * 0.005));
+      }
+      _tSingle = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
   }, { passive: true });
-  window.addEventListener('touchend', () => _tPrev = null);
+  window.addEventListener('touchend', e => {
+    if (e.touches.length === 0) { _tPrev = null; _tSingle = null; _tSingleMoved = false; }
+  });
+
+  // Virtual joystick touch handlers
+  const jZone = document.getElementById('joystick-zone');
+  const jKnob = document.getElementById('joystick-knob');
+  if (jZone) {
+    const JR = 38;
+    let jCenter = null;
+    jZone.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const r = jZone.getBoundingClientRect();
+      jCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, { passive: false });
+    jZone.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (!jCenter) return;
+      let dx = e.touches[0].clientX - jCenter.x;
+      let dy = e.touches[0].clientY - jCenter.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > JR) { dx = dx / dist * JR; dy = dy / dist * JR; }
+      jKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      joystick.dx = dx / JR;
+      joystick.dz = dy / JR;
+    }, { passive: false });
+    jZone.addEventListener('touchend', () => {
+      jCenter = null;
+      jKnob.style.transform = 'translate(-50%, -50%)';
+      joystick.dx = 0; joystick.dz = 0;
+    });
+  }
 
   // Laptop touchpad: two-finger swipe fires wheel events
   renderer.domElement.addEventListener('wheel', e => {
@@ -1630,9 +1683,10 @@ export function initWorld(currentUser) {
   socket.on('notifCount', n => { window.setNotifCount && window.setNotifCount(n); });
   socket.on('privateMessage', msg => { window.handlePrivateMessage && window.handlePrivateMessage(msg); });
 
-  // Expose socket to UI
+  // Expose socket and controls to UI
   window._skverSocket = socket;
   window._skverMyId = () => myId;
+  window._openNearest = openNearest;
 
   // ─── ANIMATION LOOP ───────────────────────────────────────────────────────
   function faceLabels() {
