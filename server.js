@@ -11,7 +11,7 @@ import { mkdirSync } from 'fs';
 import db from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-mkdirSync(path.join(__dirname, 'public/uploads'), { recursive: true });
+mkdirSync(path.join(__dirname, 'data/uploads'), { recursive: true });
 
 const app = express();
 const server = createServer(app);
@@ -19,6 +19,7 @@ const io = new Server(server, { cors: { origin: '*' }, transports: ['polling', '
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'data/uploads')));
 
 const sessionMiddleware = session({
   secret: 'skver-tashkent-2024',
@@ -31,7 +32,7 @@ io.engine.use(sessionMiddleware);
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, path.join(__dirname, 'public/uploads')),
+    destination: (req, file, cb) => cb(null, path.join(__dirname, 'data/uploads')),
     filename: (req, file, cb) => cb(null, `${uuid()}${path.extname(file.originalname).toLowerCase() || '.jpg'}`)
   }),
   limits: { fileSize: 8 * 1024 * 1024 },
