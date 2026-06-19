@@ -1,4 +1,3 @@
-import { initWorld } from './main.js';
 import { icon } from './icons.js';
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
@@ -23,9 +22,10 @@ async function init() {
   }
 }
 
-function enterGame() {
+async function enterGame() {
   document.getElementById('auth-overlay').style.display = 'none';
   document.getElementById('game-ui').style.display = '';
+  const { initWorld } = await import('./main.js');
   initWorld(currentUser);
   bindGameUI();
 }
