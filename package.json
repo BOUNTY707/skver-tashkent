@@ -1,0 +1,21 @@
+{
+  "name": "skver-tashkent-v7-2-world-axis-walk-animation",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
+    "express": "^4.19.2",
+    "express-session": "^1.19.0",
+    "multer": "^2.2.0",
+    "socket.io": "^4.7.5",
+    "uuid": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

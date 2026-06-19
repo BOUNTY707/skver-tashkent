@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skver Tashkent</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div class="auth-bg-blur"></div>
+  <div class="auth-box">
+
+    <div class="auth-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10.5h2M13 10.5h2M9 14.5h2M13 14.5h2"/></svg>
+      Skver Tashkent
+    </div>
+
+    <h2 id="auth-title">Регистрация</h2>
+
+    <div id="steps-indicator" class="steps-indicator">
+      <div class="step-dot active">1</div>
+      <div class="step-line"></div>
+      <div class="step-dot">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot">3</div>
+    </div>
+
+    <!-- Step 1: Gender -->
+    <div class="auth-step" id="step-1">
+      <p class="step-label">Выберите пол</p>
+      <div class="gender-row">
+        <div class="gender-card" data-gender="male" onclick="selectGender('male')">
+          <div class="gender-icon">
+            <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="30" cy="21" r="12" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.8"/>
+              <path d="M10 56c0-11.05 8.95-20 20-20s20 8.95 20 20" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M27 33 30 37.5 33 33" stroke="#1D4ED8" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="27" y1="33" x2="25" y2="38" stroke="#1D4ED8" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+              <line x1="33" y1="33" x2="35" y2="38" stroke="#1D4ED8" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+            </svg>
+          </div>
+          <div class="gender-label">Мужской</div>
+        </div>
+        <div class="gender-card" data-gender="female" onclick="selectGender('female')">
+          <div class="gender-icon">
+            <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 18c-2-10 5-16 12-16s14 6 12 16" fill="#BE185D" opacity="0.25"/>
+              <circle cx="30" cy="20" r="12" fill="#FCE7F3" stroke="#BE185D" stroke-width="1.8"/>
+              <path d="M20 56l6-21h8l6 21H20z" fill="#FCE7F3" stroke="#BE185D" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M26 35 30 41 34 35" stroke="#BE185D" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.7"/>
+            </svg>
+          </div>
+          <div class="gender-label">Женский</div>
+        </div>
+      </div>
+      <button class="auth-btn" onclick="authNext()">
+        Далее
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+
+    <!-- Step 2: Personal info -->
+    <div class="auth-step hidden" id="step-2">
+      <p class="step-label">Личные данные</p>
+
+      <div class="input-group">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <input type="text" id="reg-fullname" class="auth-input with-icon" placeholder="ФИО">
+      </div>
+      <div class="input-group">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.58 4.87 2 2 0 0 1 3.55 2.68h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 17z"/></svg>
+        <input type="tel" id="reg-phone" class="auth-input with-icon" placeholder="+998 XX XXX XX XX">
+      </div>
+      <div class="input-group">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input type="password" id="reg-password" class="auth-input with-icon with-toggle" placeholder="Пароль (минимум 6 символов)">
+        <button type="button" class="toggle-pw" id="reg-pw-toggle" onclick="togglePw('reg-password','reg-pw-toggle')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="input-group year-picker-wrap" id="birthyear-group">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <input type="text" id="reg-birthyear" class="auth-input with-icon year-trigger" placeholder="Год рождения" readonly>
+        <div id="year-picker-dropdown" class="year-picker-dropdown hidden">
+          <div class="year-picker-hdr">Год рождения</div>
+          <div id="year-picker-grid" class="year-picker-grid"></div>
+        </div>
+      </div>
+
+      <button class="auth-btn" onclick="authNext()">
+        Далее
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+      <button class="auth-btn-ghost" onclick="authBack()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Назад
+      </button>
+    </div>
+
+    <!-- Step 3: Photos -->
+    <div class="auth-step hidden" id="step-3">
+      <p class="step-label">Фото профиля <span style="color:#e74c3c">*</span></p>
+      <div class="photo-upload-area" id="photo-preview-area">
+        <div id="photo-preview" class="photo-preview-inner">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>Нажмите для загрузки фото</span>
+        </div>
+        <input type="file" id="reg-photo" accept="image/*" hidden>
+      </div>
+
+      <p class="step-label" style="margin-top:14px">Фото удостоверения <span class="optional">(необязательно)</span></p>
+      <div class="photo-upload-area small" id="photo-id-preview-area">
+        <div id="photo-id-preview" class="photo-preview-inner">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><circle cx="8.5" cy="12" r="2.5"/><path d="M14 9.5h5M14 12h4M14 14.5h3"/></svg>
+          <span>Загрузить ID-документ</span>
+        </div>
+        <input type="file" id="reg-photo-id" accept="image/*" hidden>
+      </div>
+
+      <button class="auth-btn" id="reg-submit-btn" onclick="submitRegister()" style="margin-top:16px">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Создать аккаунт
+      </button>
+      <button class="auth-btn-ghost" onclick="authBack()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Назад
+      </button>
+    </div>
+
+    <!-- Login -->
+    <div class="auth-step hidden" id="step-login">
+      <div class="input-group">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.58 4.87 2 2 0 0 1 3.55 2.68h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 17z"/></svg>
+        <input type="tel" id="login-phone" class="auth-input with-icon" placeholder="+998 XX XXX XX XX">
+      </div>
+      <div class="input-group">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input type="password" id="login-password" class="auth-input with-icon" placeholder="Пароль">
+      </div>
+      <div id="login-error" class="error-msg"></div>
+      <button class="auth-btn" id="login-btn" onclick="submitLogin()">
+        Войти
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+
+    <div class="auth-footer">
+      <span id="auth-toggle-text">Уже есть аккаунт?</span>
+      <a href="#" id="auth-toggle-link" onclick="toggleAuthMode(); return false">Войти</a>
+    </div>
+  </div>
+</div>
+
+<!-- GAME UI -->
+<div id="game-ui" style="display:none">
+  <div id="hud">
+    <div class="brand">Skver Tashkent</div>
+    <div class="hint">WASD · Shift(бег) · E(открыть) · Клик на игрока — профиль</div>
+    <div class="hud-row">
+      <div id="nearby">Подойдите к объекту</div>
+      <div id="online">Онлайн: 1</div>
+      <div id="avatar-status" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Top-right controls -->
+  <div id="top-controls">
+    <div id="music-btn" onclick="uiToggleMusic()" title="Выключить музыку">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    </div>
+    <div id="myprofile-btn" onclick="openMyProfile()" title="Мой профиль">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+    <div id="notif-btn" onclick="toggleNotifications()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span id="notif-badge" style="display:none">0</span>
+    </div>
+  </div>
+
+  <div id="notif-panel" class="hidden">
+    <div class="panel-header">
+      <span>Уведомления</span>
+      <button class="panel-close" onclick="toggleNotifications()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="notif-list"></div>
+  </div>
+
+  <!-- <div id="name-box">
+    <span id="player-name-display" style="color:white;font-weight:700;font-size:13px;padding:2px 0;letter-spacing:.01em"></span>
+  </div> -->
+
+  <div id="chat">
+    <div id="chat-log"></div>
+    <input id="chat-input" maxlength="90" placeholder="Сообщение и Enter">
+  </div>
+</div>
+
+<!-- PLACE CARD -->
+<div id="place-card" class="hidden">
+  <button id="close-card" onclick="closePlaceCard()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <div class="place-header">
+    <div id="place-category" class="place-category-tag"></div>
+    <h2 id="place-title"></h2>
+  </div>
+  <div class="place-tabs">
+    <button class="tab-btn active" data-tab="info" onclick="switchPlaceTab('info')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Инфо
+    </button>
+    <button class="tab-btn" id="tab-btn-menu" data-tab="menu" onclick="switchPlaceTab('menu')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Меню
+    </button>
+    <button class="tab-btn" id="tab-btn-booking" data-tab="booking" onclick="switchPlaceTab('booking')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Бронь
+    </button>
+    <button class="tab-btn" data-tab="location" onclick="switchPlaceTab('location')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+      Адрес
+    </button>
+    <button class="tab-btn" id="tab-btn-bookings" data-tab="bookings" onclick="switchPlaceTab('bookings')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Брони
+    </button>
+  </div>
+  <div class="tab-content" id="tab-info"><p id="place-desc"></p></div>
+  <div class="tab-content hidden" id="tab-menu"><div id="menu-list"></div></div>
+  <div class="tab-content hidden" id="tab-booking">
+    <div class="booking-form">
+      <label>Дата</label><input type="date" id="book-date" class="auth-input">
+      <label>Время</label><input type="time" id="book-time" class="auth-input" value="12:00">
+      <label>Количество гостей</label><input type="number" id="book-guests" class="auth-input" value="2" min="1" max="20">
+      <label>Комментарий <span class="optional">(необязательно)</span></label>
+      <textarea id="book-comment" class="auth-input" rows="2" placeholder="Особые пожелания..."></textarea>
+      <button class="auth-btn" id="book-submit-btn" onclick="submitBooking()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Забронировать
+      </button>
+      <div id="booking-msg"></div>
+    </div>
+  </div>
+  <div class="tab-content hidden" id="tab-location">
+    <div id="place-location-text" class="location-text"></div>
+    <div id="place-map-btns" class="map-btns-wrap"></div>
+  </div>
+  <div class="tab-content hidden" id="tab-bookings"><div id="bookings-list"></div></div>
+</div>
+
+<!-- MY PROFILE MODAL -->
+<div id="my-profile-modal" class="hidden modal-overlay" onclick="if(event.target===this)closeMyProfile()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeMyProfile()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <h3 style="font-size:17px;font-weight:800;color:#1a2533;margin-bottom:18px;text-align:center">Мой профиль</h3>
+    <div id="my-profile-content"></div>
+  </div>
+</div>
+
+<!-- PROFILE MODAL -->
+<div id="profile-modal" class="hidden modal-overlay" onclick="if(event.target===this)closeProfileModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeProfileModal()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div id="profile-content"></div>
+  </div>
+</div>
+
+<!-- PRIVATE CHAT -->
+<div id="private-chat" class="hidden">
+  <div class="pchat-header">
+    <div class="pchat-header-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span id="pchat-title">Личный чат</span>
+    </div>
+    <button onclick="closePrivateChat()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div id="pchat-log"></div>
+  <div class="pchat-input-row">
+    <input id="pchat-input" placeholder="Сообщение..." maxlength="500">
+    <button onclick="sendPrivateMessage()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="ui.js"></script>
+</body>
+</html>
