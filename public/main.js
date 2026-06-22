@@ -1436,10 +1436,14 @@ export function initWorld(currentUser) {
 
   // ─── PLAYER UPDATE ────────────────────────────────────────────────────────
   function updatePlayer(dt) {
-    const d = new THREE.Vector3();
-    if (keys.w) d.z -= 1; if (keys.s) d.z += 1;
-    if (keys.a) d.x -= 1; if (keys.d) d.x += 1;
-    d.x += joystick.dx; d.z += joystick.dz;
+    // ввод в «экранных» осях: W — вперёд (−Z), D — вправо (+X)
+    let ix = 0, iz = 0;
+    if (keys.w) iz -= 1; if (keys.s) iz += 1;
+    if (keys.a) ix -= 1; if (keys.d) ix += 1;
+    ix += joystick.dx; iz += joystick.dz;
+    // поворачиваем ввод на угол камеры → движение относительно камеры
+    const cY = Math.cos(camYaw), sY = Math.sin(camYaw);
+    const d = new THREE.Vector3(ix * cY + iz * sY, 0, -ix * sY + iz * cY);
     const m = d.lengthSq() > 0.01;
     if (m) {
       d.normalize();

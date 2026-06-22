@@ -133,11 +133,12 @@ app.post('/api/bookings', requireAuth, (req, res) => {
 
 // Лента активности — последние брони всех пользователей
 app.get('/api/feed', requireAuth, (req, res) => {
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 30));
   const rows = db.prepare(`
     SELECT b.id, b.place_name AS placeName, b.date, b.time, b.guests, b.created_at,
            u.id AS userId, u.fullname, u.photo
     FROM bookings b JOIN users u ON u.id = b.user_id
-    ORDER BY b.created_at DESC LIMIT 30`).all();
+    ORDER BY b.created_at DESC LIMIT ?`).all(limit);
   res.json(rows);
 });
 
@@ -373,5 +374,12 @@ io.on('connection', s => {
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', players: Object.keys(players).length, uptime: process.uptime() }));
+
+// SPA fallback — клиентские маршруты (/feed, /map, ...) отдают index.html,
+// чтобы прямой переход и перезагрузка работали без хеша в URL
+app.get('*', (req, res, next) => {
+  if (/^\/(api|auth|uploads|socket\.io|health)/.test(req.path)) return next();
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 server.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Skver v7.2 running on :3000'));

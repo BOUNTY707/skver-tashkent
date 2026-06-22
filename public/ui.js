@@ -13,15 +13,65 @@ let notifCount = 0;
 let worldInited = false;
 let onlinePollTimer = null;
 
+// ─── ROUTING (hash) ────────────────────────────────────────────────────────────
+// Хранит текущий вид в URL (#/, #/feed, #/map), чтобы при перезагрузке
+// открывалась та же страница, а кнопки «назад/вперёд» работали.
+function routeFromPath() {
+  const p = (location.pathname || '/').replace(/\/+$/, '').toLowerCase();
+  if (p === '/feed') return 'feed';
+  if (p === '/map' || p === '/game') return 'map';
+  return 'home';
+}
+function go(route, replace) {
+  route = ['home', 'feed', 'map'].includes(route) ? route : 'home';
+  const path = route === 'home' ? '/' : '/' + route;
+  if (location.pathname !== path) {
+    if (replace) history.replaceState({ route }, '', path);
+    else history.pushState({ route }, '', path);
+  }
+  applyRoute(route);
+}
+window.addEventListener('popstate', () => { if (currentUser) applyRoute(routeFromPath()); });
+
+function applyRoute(route) {
+  if (!currentUser) { showAuth(); return; }
+  document.getElementById('auth-overlay').style.display = 'none';
+  document.getElementById('notif-panel').classList.add('hidden');
+  const home = document.getElementById('home-page');
+  const feed = document.getElementById('feed-page');
+  const game = document.getElementById('game-ui');
+  ensureSocket();
+  if (route === 'feed') {
+    home.style.display = 'none'; game.style.display = 'none'; feed.style.display = '';
+    stopOnlinePolling();
+    resetFeedFilters(true);
+    loadFeedPage();
+  } else if (route === 'map') {
+    home.style.display = 'none'; feed.style.display = 'none'; game.style.display = '';
+    stopOnlinePolling();
+    startGame();
+  } else {
+    feed.style.display = 'none'; game.style.display = 'none'; home.style.display = '';
+    loadGlobe();
+    loadHomeData();
+    startOnlinePolling();
+  }
+}
+
+async function startGame() {
+  if (worldInited) return;            // мир инициализируется только один раз
+  worldInited = true;
+  const { initWorld } = await import('./main.js');
+  initWorld(currentUser);
+  bindGameUI();
+}
+
 // ─── INIT ──────────────────────────────────────────────────────────────────────
 async function init() {
   const { user } = await fetch('/auth/me').then(r => r.json());
-  if (user) {
-    currentUser = user;
-    enterHome();
-  } else {
-    showAuth();
-  }
+  if (!user) { showAuth(); return; }
+  currentUser = user;
+  go(routeFromPath(), true);          // восстановить вид из URL
 }
 
 // ─── SHARED SOCKET ──────────────────────────────────────────────────────────
@@ -49,15 +99,7 @@ async function loadGlobe() {
   catch (e) { console.warn('3D globe failed to load:', e); }
 }
 
-function enterHome() {
-  document.getElementById('auth-overlay').style.display = 'none';
-  document.getElementById('game-ui').style.display = 'none';
-  document.getElementById('home-page').style.display = '';
-  ensureSocket();
-  loadGlobe();
-  loadHomeData();
-  startOnlinePolling();
-}
+function enterHome() { go('home'); }   // тонкая обёртка над роутером
 
 // плавный счётчик чисел (wow-эффект)
 function animateCount(el, to) {
@@ -122,6 +164,15 @@ function relativeTime(ts) {
 }
 
 // премиум svg-иконки по типу заведения
+// бронь актуальна, если её дата — сегодня или позже (прошедшие дни уходят сами)
+function todayISO() {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+function isUpcoming(it) {
+  return !it || !it.date || it.date >= todayISO();
+}
+
 function placeIcon(name = '') {
   const n = name.toLowerCase();
   if (/cafe|кафе|coffee|кофе|1991/.test(n)) return icon('coffee', 20, '#7dd3fc');
@@ -194,16 +245,182 @@ function renderFeed() {
 
 async function loadFeed() {
   try {
-    _feedItems = await fetch('/api/feed').then(r => r.json());
+    _feedItems = (await fetch('/api/feed').then(r => r.json())).filter(isUpcoming);
   } catch { _feedItems = []; }
   renderFeed();
 }
 
 window.handleFeedItem = function (it) {
+  if (!isUpcoming(it)) return;   // прошедшие даты в ленту не попадают
   _feedItems.unshift(it);
   if (_feedItems.length > 40) _feedItems.length = 40;
   renderFeed();
+  // если открыта отдельная страница ленты — обновим и её
+  const fp = document.getElementById('feed-page');
+  if (fp && fp.style.display !== 'none') { _fpItems.unshift(it); renderFeedPage(); }
 };
+
+// ─── ЛЕНТА АКТИВНОСТИ — ОТДЕЛЬНАЯ СТРАНИЦА (grid + фильтры) ──────────────────────
+let _fpItems = [];
+let _fpFrom = null, _fpTo = null;          // диапазон дат (ISO)
+let _fpPerson = 'all';                      // 'all' | userId
+
+window.openFeedPage = function () { go('feed'); };
+window.closeFeedPage = function () { go('home'); };
+
+window.loadFeedPage = async function () {
+  const grid = document.getElementById('fp-grid');
+  const empty = document.getElementById('fp-empty');
+  if (empty) empty.style.display = 'none';
+  if (grid) grid.innerHTML = '<div class="fp-loading">Загрузка...</div>';
+  try { _fpItems = (await fetch('/api/feed?limit=120').then(r => r.json())).filter(isUpcoming); }
+  catch { _fpItems = []; }
+  renderFeedPage();
+};
+
+function fpDateLabel(date) {
+  const [y, m, d] = (date || '').split('-').map(Number);
+  return y ? `${d} ${RU_MONTHS[(m || 1) - 1]}` : (date || '');
+}
+
+function fpCardHtml(it) {
+  const first = (it.fullname || '').split(' ')[0] || 'Кто-то';
+  const av = it.photo
+    ? `<img src="/uploads/${it.photo}" alt="">`
+    : `${(it.fullname || '?')[0].toUpperCase()}`;
+  return `<div class="fp-card">
+    <div class="fp-card-top">
+      <div class="fp-card-ic">${placeIcon(it.placeName)}</div>
+      <div class="fp-card-when">${icon('calendar', 13, '#7dd3fc')} ${escapeHtml(fmtBookingDate(it.date, it.time))}</div>
+    </div>
+    <div class="fp-card-place">«${escapeHtml(it.placeName || 'заведение')}»</div>
+    <div class="fp-card-foot">
+      <span class="fp-card-av">${av}</span>
+      <span class="fp-card-name">${escapeHtml(first)}</span>
+      <span class="fp-card-ago">${relativeTime(it.created_at)}</span>
+    </div>
+  </div>`;
+}
+
+function renderFeedPage() {
+  const grid = document.getElementById('fp-grid');
+  const empty = document.getElementById('fp-empty');
+  if (!grid) return;
+  let items = _fpItems.slice();
+  if (_fpPerson !== 'all') items = items.filter(i => i.userId === _fpPerson);
+  if (_fpFrom) items = items.filter(i => (i.date || '') >= _fpFrom);
+  if (_fpTo) items = items.filter(i => (i.date || '') <= _fpTo);
+  if (!items.length) {
+    grid.innerHTML = '';
+    empty.style.display = '';
+    empty.textContent = _fpItems.length ? 'Ничего не найдено по фильтру' : 'Пока никто ничего не бронировал. Будьте первым! 🎉';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = items.map(fpCardHtml).join('');
+}
+
+function fpUpdateReset() {
+  const show = _fpFrom || _fpTo || _fpPerson !== 'all';
+  document.getElementById('fp-reset').classList.toggle('hidden', !show);
+}
+
+window.resetFeedFilters = function (silent) {
+  _fpFrom = null; _fpTo = null; _fpPerson = 'all';
+  document.getElementById('fp-from-label').textContent = 'От';
+  document.getElementById('fp-to-label').textContent = 'До';
+  document.getElementById('fp-person-label').textContent = 'Все';
+  document.getElementById('fp-person-btn').classList.remove('active');
+  document.getElementById('fp-from-btn').classList.remove('active');
+  document.getElementById('fp-to-btn').classList.remove('active');
+  fpUpdateReset();
+  if (!silent) renderFeedPage();
+};
+
+// — фильтр по человеку (друзья) —
+window.toggleFeedPerson = async function (e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('fp-person-menu');
+  if (menu.classList.toggle('hidden')) return;
+  menu.innerHTML = '<div class="fp-fitem-load">Загрузка...</div>';
+  let friends = [];
+  try { friends = await fetch('/api/friends').then(r => r.json()); } catch {}
+  const row = (id, name, inner) =>
+    `<button class="fp-fitem${_fpPerson === id ? ' active' : ''}" onclick="pickFeedPerson('${id}', '${escapeHtml(name).replace(/'/g, "\\'")}')">${inner}</button>`;
+  let html = row('all', 'Все', `${icon('users', 16)} <span>Все</span>`);
+  if (currentUser) html += row(currentUser.id, 'Я', `${icon('user', 16)} <span>Я</span>`);
+  if (friends.length) {
+    html += '<div class="fp-fsep">Друзья</div>';
+    html += friends.map(f => row(f.id, f.fullname,
+      `${f.photo ? `<img src="/uploads/${f.photo}" class="fp-fav">` : `<span class="fp-fav fp-fav-ph">${(f.fullname || '?')[0].toUpperCase()}</span>`}<span>${escapeHtml(f.fullname)}</span>${f.online ? '<i class="fp-fon"></i>' : ''}`)).join('');
+  } else {
+    html += '<div class="fp-fitem-empty">Нет друзей</div>';
+  }
+  menu.innerHTML = html;
+};
+
+window.pickFeedPerson = function (id, name) {
+  _fpPerson = id;
+  document.getElementById('fp-person-label').textContent = name;
+  document.getElementById('fp-person-btn').classList.toggle('active', id !== 'all');
+  document.getElementById('fp-person-menu').classList.add('hidden');
+  fpUpdateReset();
+  renderFeedPage();
+};
+
+// — календарь диапазона дат —
+let _calWhich = null, _calY, _calM;
+window.openFeedCal = function (e, which) {
+  if (e) e.stopPropagation();
+  document.getElementById('fp-person-menu').classList.add('hidden');
+  _calWhich = which;
+  const cur = which === 'from' ? _fpFrom : _fpTo;
+  const d = cur ? new Date(cur + 'T00:00:00') : new Date();
+  _calY = d.getFullYear(); _calM = d.getMonth();
+  renderCal();
+  const pop = document.getElementById('cal-popup');
+  const btn = document.getElementById(which === 'from' ? 'fp-from-btn' : 'fp-to-btn');
+  const r = btn.getBoundingClientRect();
+  pop.classList.remove('hidden');
+  pop.style.left = Math.max(10, Math.min(r.left, innerWidth - pop.offsetWidth - 10)) + 'px';
+  pop.style.top = Math.min(r.bottom + 6, innerHeight - pop.offsetHeight - 10) + 'px';
+};
+
+function renderCal() {
+  document.getElementById('cal-title').textContent = `${DP_MONTHS_FULL[_calM]} ${_calY}`;
+  const grid = document.getElementById('cal-grid');
+  const startDow = (new Date(_calY, _calM, 1).getDay() + 6) % 7;
+  const days = new Date(_calY, _calM + 1, 0).getDate();
+  let html = '';
+  for (let i = 0; i < startDow; i++) html += '<span class="cal-cell empty"></span>';
+  for (let d = 1; d <= days; d++) {
+    const iso = `${_calY}-${dpPad(_calM + 1)}-${dpPad(d)}`;
+    let dis = false;
+    if (_calWhich === 'from' && _fpTo && iso > _fpTo) dis = true;
+    if (_calWhich === 'to' && _fpFrom && iso < _fpFrom) dis = true;
+    const sel = (_calWhich === 'from' ? _fpFrom : _fpTo) === iso;
+    html += `<button type="button" class="cal-cell${dis ? ' past' : ''}${sel ? ' sel' : ''}" ${dis ? 'disabled' : ''} data-iso="${iso}">${d}</button>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.cal-cell:not(.empty):not(.past)').forEach(b => b.addEventListener('click', () => calPick(b.dataset.iso)));
+  const prev = document.getElementById('cal-prev');
+}
+
+function calPick(iso) {
+  if (_calWhich === 'from') { _fpFrom = iso; document.getElementById('fp-from-label').textContent = fpDateLabel(iso); document.getElementById('fp-from-btn').classList.add('active'); }
+  else { _fpTo = iso; document.getElementById('fp-to-label').textContent = fpDateLabel(iso); document.getElementById('fp-to-btn').classList.add('active'); }
+  document.getElementById('cal-popup').classList.add('hidden');
+  fpUpdateReset();
+  renderFeedPage();
+}
+
+function initFeedCalendar() {
+  const prev = document.getElementById('cal-prev'), next = document.getElementById('cal-next');
+  if (!prev) return;
+  prev.addEventListener('click', e => { e.stopPropagation(); _calM--; if (_calM < 0) { _calM = 11; _calY--; } renderCal(); });
+  next.addEventListener('click', e => { e.stopPropagation(); _calM++; if (_calM > 11) { _calM = 0; _calY++; } renderCal(); });
+  document.getElementById('cal-popup').addEventListener('click', e => e.stopPropagation());
+}
 
 // ─── PEOPLE LIST MODAL (online / friends) ──────────────────────────────────────
 function peopleAvatar(p, big) {
@@ -300,33 +517,13 @@ function startOnlinePolling() {
 }
 function stopOnlinePolling() { if (onlinePollTimer) { clearInterval(onlinePollTimer); onlinePollTimer = null; } }
 
-window.enterGameFromHome = function () {
-  document.getElementById('home-page').style.display = 'none';
-  enterGame();
-};
-
-window.goHome = function () {
-  document.getElementById('game-ui').style.display = 'none';
-  document.getElementById('notif-panel').classList.add('hidden');
-  enterHome();
-};
+window.enterGameFromHome = function () { go('map'); };
+window.goHome = function () { go('home'); };
 
 window.logout = async function () {
   try { await fetch('/auth/logout', { method: 'POST' }); } catch {}
-  location.reload();
+  window.location.href = '/';
 };
-
-async function enterGame() {
-  document.getElementById('auth-overlay').style.display = 'none';
-  document.getElementById('home-page').style.display = 'none';
-  document.getElementById('game-ui').style.display = '';
-  stopOnlinePolling();
-  if (worldInited) return;      // мир инициализируется только один раз
-  worldInited = true;
-  const { initWorld } = await import('./main.js');
-  initWorld(currentUser);
-  bindGameUI();
-}
 
 // ─── AUTH ──────────────────────────────────────────────────────────────────────
 function showAuth() {
@@ -856,6 +1053,15 @@ document.addEventListener('click', e => {
   if (pchat && !pchat.classList.contains('hidden') && !pchat.contains(t) && !onCanvas
       && !inside('[onclick*="openPrivateChat"]'))
     window.closePrivateChat();
+
+  // Календарь диапазона (лента) и меню выбора человека
+  const cal = document.getElementById('cal-popup');
+  if (cal && !cal.classList.contains('hidden') && !cal.contains(t)
+      && !inside('#fp-from-btn') && !inside('#fp-to-btn'))
+    cal.classList.add('hidden');
+  const pmenu = document.getElementById('fp-person-menu');
+  if (pmenu && !pmenu.classList.contains('hidden') && !inside('#fp-person-btn') && !pmenu.contains(t))
+    pmenu.classList.add('hidden');
 });
 
 async function loadNotifications() {
@@ -1049,5 +1255,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initPhoneMask('login-phone');
   initYearPicker();
   initDatePicker();
+  initFeedCalendar();
   init();
 });
