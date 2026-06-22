@@ -114,13 +114,31 @@ app.post('/api/bookings', requireAuth, (req, res) => {
   const { place_id, place_name, date, time, guests, comment } = req.body;
   if (!place_id || !date || !time) return res.status(400).json({ error: 'Укажите дату и время' });
   const id = uuid();
-  db.prepare('INSERT INTO bookings (id,place_id,user_id,date,time,guests,comment) VALUES (?,?,?,?,?,?,?)')
-    .run(id, place_id, req.session.userId, date, time, parseInt(guests) || 1, comment || '');
+  const pname = (place_name || '').toString().slice(0, 80) || 'заведение';
+  const g = parseInt(guests) || 1;
+  db.prepare('INSERT INTO bookings (id,place_id,place_name,user_id,date,time,guests,comment) VALUES (?,?,?,?,?,?,?,?)')
+    .run(id, place_id, pname, req.session.userId, date, time, g, comment || '');
   // уведомить друзей о брони
   const me = db.prepare('SELECT fullname,photo FROM users WHERE id=?').get(req.session.userId);
-  const data = { fromId: req.session.userId, fromName: me.fullname, fromPhoto: me.photo, placeName: place_name || 'заведение', date, time };
+  const data = { fromId: req.session.userId, fromName: me.fullname, fromPhoto: me.photo, placeName: pname, date, time };
   for (const fid of getFriendIds(req.session.userId)) notify(fid, 'booking', data);
+  // добавить в ленту активности (всем онлайн)
+  const feedItem = {
+    id, userId: req.session.userId, fullname: me.fullname, photo: me.photo,
+    placeName: pname, date, time, guests: g, created_at: Math.floor(Date.now() / 1000),
+  };
+  io.emit('feedItem', feedItem);
   res.json({ ok: true, id });
+});
+
+// Лента активности — последние брони всех пользователей
+app.get('/api/feed', requireAuth, (req, res) => {
+  const rows = db.prepare(`
+    SELECT b.id, b.place_name AS placeName, b.date, b.time, b.guests, b.created_at,
+           u.id AS userId, u.fullname, u.photo
+    FROM bookings b JOIN users u ON u.id = b.user_id
+    ORDER BY b.created_at DESC LIMIT 30`).all();
+  res.json(rows);
 });
 
 app.get('/api/bookings/place/:placeId', requireAuth, (req, res) => {

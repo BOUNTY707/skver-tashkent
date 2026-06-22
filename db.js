@@ -25,6 +25,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS bookings (
     id TEXT PRIMARY KEY,
     place_id TEXT NOT NULL,
+    place_name TEXT DEFAULT '',
     user_id TEXT NOT NULL,
     date TEXT NOT NULL,
     time TEXT NOT NULL,
@@ -58,5 +59,8 @@ db.exec(`
     created_at INTEGER DEFAULT (strftime('%s','now'))
   );
 `);
+
+// Миграция для существующих баз (если столбца ещё нет)
+try { db.exec("ALTER TABLE bookings ADD COLUMN place_name TEXT DEFAULT ''"); } catch {}
 
 export default db;

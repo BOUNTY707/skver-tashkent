@@ -36,6 +36,7 @@ function ensureSocket() {
   socket.on('notification', d => window.handleNotification && window.handleNotification(d));
   socket.on('notifCount', n => window.setNotifCount && window.setNotifCount(n));
   socket.on('privateMessage', m => window.handlePrivateMessage && window.handlePrivateMessage(m));
+  socket.on('feedItem', it => window.handleFeedItem && window.handleFeedItem(it));
   return socket;
 }
 
@@ -82,10 +83,11 @@ async function loadHomeData() {
       renderHomeProfile(data);
     }
   } catch {}
-  // друзья + онлайн + уведомления параллельно
+  // друзья + онлайн + уведомления + лента параллельно
   loadHomeFriends();
   refreshOnlineCount();
   refreshNotifCount();
+  loadFeed();
 }
 
 function renderHomeProfile(data) {
@@ -107,6 +109,101 @@ async function loadHomeFriends() {
     animateCount(document.getElementById('home-friends-online'), friends.filter(f => f.online).length);
   } catch {}
 }
+
+// ─── ЛЕНТА АКТИВНОСТИ ──────────────────────────────────────────────────────────
+function relativeTime(ts) {
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  if (s < 60) return 'только что';
+  const m = Math.floor(s / 60); if (m < 60) return `${m} мин назад`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h} ч назад`;
+  const d = Math.floor(h / 24); if (d === 1) return 'вчера';
+  if (d < 7) return `${d} дн назад`;
+  return new Date(ts * 1000).toLocaleDateString('ru-RU');
+}
+
+// премиум svg-иконки по типу заведения
+function placeIcon(name = '') {
+  const n = name.toLowerCase();
+  if (/cafe|кафе|coffee|кофе|1991/.test(n)) return icon('coffee', 20, '#7dd3fc');
+  if (/hotel|отель|мехмон|hostel|хостел/.test(n)) return icon('hotel', 20, '#7dd3fc');
+  if (/navvat|плов|ресторан|restaurant|лагман|еда|food/.test(n)) return icon('utensils', 20, '#7dd3fc');
+  if (/музе|museum|памятник|monument/.test(n)) return icon('monument', 20, '#7dd3fc');
+  return icon('pin', 20, '#7dd3fc');
+}
+
+const RU_MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+function fmtBookingDate(date, time) {
+  const [y, m, d] = (date || '').split('-').map(Number);
+  const dt = y ? `${d} ${RU_MONTHS[(m || 1) - 1]}` : '';
+  return [dt, time].filter(Boolean).join(', ');
+}
+
+function feedCardHtml(it) {
+  const first = (it.fullname || '').split(' ')[0] || it.fullname || 'Кто-то';
+  const av = it.photo
+    ? `<img src="/uploads/${it.photo}" alt="">`
+    : `${(it.fullname || '?')[0].toUpperCase()}`;
+  return `<div class="lp-feed-card">
+    <div class="lp-feed-card-ic">${placeIcon(it.placeName)}</div>
+    <div class="lp-feed-card-body">
+      <div class="lp-feed-card-place">«${escapeHtml(it.placeName || 'заведение')}»</div>
+      <div class="lp-feed-card-when">${icon('calendar', 13, '#7dd3fc')} ${escapeHtml(fmtBookingDate(it.date, it.time))}</div>
+      <div class="lp-feed-card-meta">
+        <span class="lp-feed-mini-av">${av}</span>
+        <span class="lp-feed-card-name">${escapeHtml(first)}</span>
+        <span class="lp-feed-card-dot">·</span>
+        <span>${relativeTime(it.created_at)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+let _feedItems = [];
+
+const FEED_SCROLL_MIN = 8; // прокрутка включается, когда карточек больше 7
+
+function renderFeed() {
+  const track = document.getElementById('lp-feed-track');
+  const empty = document.getElementById('lp-feed-empty');
+  if (!track) return;
+  const marquee = track.parentElement;
+  if (!_feedItems.length) {
+    track.innerHTML = '';
+    track.classList.remove('animate');
+    marquee.classList.remove('static');
+    if (empty) { empty.style.display = ''; empty.textContent = 'Пока никто ничего не бронировал. Будьте первым! 🎉'; }
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  const base = _feedItems.map(feedCardHtml).join('');
+
+  if (_feedItems.length >= FEED_SCROLL_MIN) {
+    // карточек много — бесконечная бегущая строка (дублируем для бесшовности)
+    track.innerHTML = base + base;
+    track.classList.add('animate');
+    marquee.classList.remove('static');
+    track.style.animationDuration = Math.max(24, _feedItems.length * 4) + 's';
+  } else {
+    // карточек мало — не крутим, показываем по центру (на узких экранах — свайп)
+    track.innerHTML = base;
+    track.classList.remove('animate');
+    marquee.classList.add('static');
+    track.style.animationDuration = '';
+  }
+}
+
+async function loadFeed() {
+  try {
+    _feedItems = await fetch('/api/feed').then(r => r.json());
+  } catch { _feedItems = []; }
+  renderFeed();
+}
+
+window.handleFeedItem = function (it) {
+  _feedItems.unshift(it);
+  if (_feedItems.length > 40) _feedItems.length = 40;
+  renderFeed();
+};
 
 // ─── PEOPLE LIST MODAL (online / friends) ──────────────────────────────────────
 function peopleAvatar(p, big) {
@@ -442,13 +539,83 @@ window.submitBooking = async function () {
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'Ошибка', 'error'); btn.disabled = false; btn.textContent = 'Забронировать'; return; }
-    document.getElementById('booking-msg').innerHTML = `<div class="booking-success">${icon('check', 16)} Бронирование подтверждено!</div>`;
     btn.disabled = false; btn.textContent = 'Забронировать';
-    document.getElementById('book-date').value = '';
+    showBookingSuccess(openPlaceData.name, date, time, guests);
     document.getElementById('book-comment').value = '';
-    setTimeout(() => { document.getElementById('booking-msg').innerHTML = ''; }, 3500);
   } catch { showToast('Ошибка сети', 'error'); btn.disabled = false; btn.textContent = 'Забронировать'; }
 };
+
+// ─── BOOKING SUCCESS MODAL ─────────────────────────────────────────────────────
+window.showBookingSuccess = function (placeName, date, time, guests) {
+  document.getElementById('bs-place').textContent = `«${placeName}»`;
+  document.getElementById('bs-meta').innerHTML =
+    `${icon('calendar', 15)} ${escapeHtml(fmtBookingDate(date, time))} &nbsp;·&nbsp; ${icon('users', 15)} ${parseInt(guests) || 1} чел.`;
+  document.getElementById('booking-success-modal').classList.remove('hidden');
+};
+window.closeBookingSuccess = function () {
+  document.getElementById('booking-success-modal').classList.add('hidden');
+};
+
+// ─── CUSTOM DATE PICKER (бронь) ────────────────────────────────────────────────
+const DP_MONTHS_FULL = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+let dpY, dpM, dpSel = null;
+const dpPad = n => String(n).padStart(2, '0');
+
+window.toggleDatePicker = function (e) {
+  if (e) e.stopPropagation();
+  const pop = document.getElementById('dp-popup');
+  if (!pop) return;
+  if (pop.classList.toggle('hidden')) return;
+  const b = dpSel || (() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; })();
+  dpY = b.y; dpM = b.m;
+  renderDp();
+};
+
+function renderDp() {
+  const title = document.getElementById('dp-title'), grid = document.getElementById('dp-grid');
+  if (!title || !grid) return;
+  title.textContent = `${DP_MONTHS_FULL[dpM]} ${dpY}`;
+  const now = new Date();
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startDow = (new Date(dpY, dpM, 1).getDay() + 6) % 7;
+  const days = new Date(dpY, dpM + 1, 0).getDate();
+  let html = '';
+  for (let i = 0; i < startDow; i++) html += '<span class="dp-cell empty"></span>';
+  for (let d = 1; d <= days; d++) {
+    const t = new Date(dpY, dpM, d).getTime();
+    const past = t < todayMid, isToday = t === todayMid;
+    const sel = dpSel && dpSel.y === dpY && dpSel.m === dpM && dpSel.d === d;
+    html += `<button type="button" class="dp-cell${past ? ' past' : ''}${isToday ? ' today' : ''}${sel ? ' sel' : ''}" ${past ? 'disabled' : ''} data-d="${d}">${d}</button>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.dp-cell:not(.empty):not(.past)').forEach(b =>
+    b.addEventListener('click', () => dpPick(dpY, dpM, +b.dataset.d)));
+  const prev = document.getElementById('dp-prev');
+  const atMin = dpY < now.getFullYear() || (dpY === now.getFullYear() && dpM <= now.getMonth());
+  prev.disabled = atMin; prev.classList.toggle('disabled', atMin);
+}
+
+function dpPick(y, m, d) {
+  dpSel = { y, m, d };
+  document.getElementById('book-date').value = `${y}-${dpPad(m + 1)}-${dpPad(d)}`;
+  document.getElementById('book-date-label').textContent = `${d} ${RU_MONTHS[m]} ${y}`;
+  document.getElementById('book-date-trigger').classList.add('filled');
+  document.getElementById('dp-popup').classList.add('hidden');
+}
+
+function initDatePicker() {
+  const prev = document.getElementById('dp-prev'), next = document.getElementById('dp-next'), pop = document.getElementById('dp-popup');
+  if (!prev || !next || !pop) return;
+  prev.addEventListener('click', e => { e.stopPropagation(); if (prev.disabled) return; dpM--; if (dpM < 0) { dpM = 11; dpY--; } renderDp(); });
+  next.addEventListener('click', e => { e.stopPropagation(); dpM++; if (dpM > 11) { dpM = 0; dpY++; } renderDp(); });
+  pop.addEventListener('click', e => e.stopPropagation());
+  const d = new Date(); dpPick(d.getFullYear(), d.getMonth(), d.getDate());   // по умолчанию — сегодня
+  document.addEventListener('click', e => {
+    if (pop.classList.contains('hidden')) return;
+    if (e.target.closest && e.target.closest('.dp-wrap')) return;
+    pop.classList.add('hidden');
+  });
+}
 
 // ─── PROFILE MODAL ────────────────────────────────────────────────────────────
 window.openProfileModal = async function (userId) {
@@ -666,13 +833,29 @@ window.toggleNotifications = async function () {
   } catch { window.setNotifCount(0); }
 };
 
-// Закрывать панель уведомлений по клику вне её (и при открытии других окон)
+// Закрывать открытые панели/карточки по клику вне их.
+// Клик по 3D-сцене (canvas) исключаем — он сам открывает карточку места/профиль игрока.
 document.addEventListener('click', e => {
-  const panel = document.getElementById('notif-panel');
-  if (!panel || panel.classList.contains('hidden')) return;
-  if (panel.contains(e.target)) return;
-  if (e.target.closest && (e.target.closest('#home-notif-btn') || e.target.closest('#notif-btn'))) return;
-  panel.classList.add('hidden');
+  const t = e.target;
+  const inside = sel => t.closest && t.closest(sel);
+  const onCanvas = t.tagName === 'CANVAS';
+
+  // Уведомления
+  const notif = document.getElementById('notif-panel');
+  if (notif && !notif.classList.contains('hidden') && !notif.contains(t)
+      && !inside('#home-notif-btn') && !inside('#notif-btn'))
+    notif.classList.add('hidden');
+
+  // Карточка места (инфо/меню/бронь)
+  const card = document.getElementById('place-card');
+  if (card && !card.classList.contains('hidden') && !card.contains(t) && !onCanvas && !inside('#mobile-open-btn'))
+    window.closePlaceCard();
+
+  // Личный чат
+  const pchat = document.getElementById('private-chat');
+  if (pchat && !pchat.classList.contains('hidden') && !pchat.contains(t) && !onCanvas
+      && !inside('[onclick*="openPrivateChat"]'))
+    window.closePrivateChat();
 });
 
 async function loadNotifications() {
@@ -862,11 +1045,9 @@ window.togglePw = function (inputId, btnId) {
 document.addEventListener('DOMContentLoaded', () => {
   window.setupPhotoUpload('reg-photo', 'photo-preview', 'photo');
   window.setupPhotoUpload('reg-photo-id', 'photo-id-preview', 'photo_id');
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('book-date').min = today;
-  document.getElementById('book-date').value = today;
   initPhoneMask('reg-phone');
   initPhoneMask('login-phone');
   initYearPicker();
+  initDatePicker();
   init();
 });

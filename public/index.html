@@ -161,49 +161,62 @@
   <canvas id="home-globe"></canvas>
   <div class="lp-vignette"></div>
 
-  <!-- Top bar -->
-  <header class="lp-topbar">
-    <div class="lp-logo">
-      <span class="logo-word">Skver <b>Tashkent</b></span>
+  <div class="lp-content">
+    <!-- Top bar -->
+    <header class="lp-topbar">
+      <div class="lp-logo">
+        <span class="logo-word">Skver <b>Tashkent</b></span>
+      </div>
+      <div class="lp-top-actions">
+        <button class="lp-icon-btn" id="home-notif-btn" onclick="toggleNotifications()" title="Уведомления">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="home-notif-badge" class="lp-badge" style="display:none">0</span>
+        </button>
+        <button class="lp-avatar-btn" onclick="openMyProfile()" title="Мой профиль">
+          <span id="lp-avatar"></span>
+        </button>
+        <button class="lp-icon-btn" onclick="logout()" title="Выйти">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Centered hero -->
+    <div class="lp-hero">
+      <div class="lp-greeting" id="lp-greeting">Добро пожаловать</div>
+      <h1 class="lp-title">Skver <span>Tashkent</span></h1>
+      <p class="lp-tagline">Виртуальный сквер Ташкента — гуляй, знакомься, бронируй любимые места</p>
+
+      <button class="lp-live" id="lp-live" onclick="openOnlineList()">
+        <span class="live-dot"></span><b id="home-online-count">0</b> человек сейчас в сквере
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+
+      <button class="lp-enter" onclick="enterGameFromHome()">
+        <div class="lp-enter-glow"></div>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        <span>Войти на карту</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+
+      <button class="lp-friends-btn" onclick="openFriendsList()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Друзья <b id="home-friends-count">0</b>
+      </button>
+      <span id="home-friends-online" style="display:none">0</span>
     </div>
-    <div class="lp-top-actions">
-      <button class="lp-icon-btn" id="home-notif-btn" onclick="toggleNotifications()" title="Уведомления">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span id="home-notif-badge" class="lp-badge" style="display:none">0</span>
-      </button>
-      <button class="lp-avatar-btn" onclick="openMyProfile()" title="Мой профиль">
-        <span id="lp-avatar"></span>
-      </button>
-      <button class="lp-icon-btn" onclick="logout()" title="Выйти">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      </button>
-    </div>
-  </header>
 
-  <!-- Centered hero -->
-  <div class="lp-hero">
-    <div class="lp-greeting" id="lp-greeting">Добро пожаловать</div>
-    <h1 class="lp-title">Skver <span>Tashkent</span></h1>
-    <p class="lp-tagline">Виртуальный сквер Ташкента — гуляй, знакомься, бронируй любимые места</p>
-
-    <button class="lp-live" id="lp-live" onclick="openOnlineList()">
-      <span class="live-dot"></span><b id="home-online-count">0</b> человек сейчас в сквере
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>
-
-    <button class="lp-enter" onclick="enterGameFromHome()">
-      <div class="lp-enter-glow"></div>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-      <span>Войти на карту</span>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-    </button>
-
-    <button class="lp-friends-btn" onclick="openFriendsList()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Друзья <b id="home-friends-count">0</b>
-    </button>
-    <!-- скрытый счётчик друзей онлайн (для модалок) -->
-    <span id="home-friends-online" style="display:none">0</span>
+    <!-- Лента активности (бегущий слайдер) -->
+    <section class="lp-feed">
+      <div class="lp-feed-hdr">
+        <span class="live-dot"></span>
+        <span>Лента активности</span>
+      </div>
+      <div class="lp-feed-marquee">
+        <div id="lp-feed-track" class="lp-feed-track"></div>
+      </div>
+      <div id="lp-feed-empty" class="lp-feed-empty" style="display:none"></div>
+    </section>
   </div>
 </div>
 
@@ -296,7 +309,24 @@
   <div class="tab-content hidden" id="tab-menu"><div id="menu-list"></div></div>
   <div class="tab-content hidden" id="tab-booking">
     <div class="booking-form">
-      <label>Дата</label><input type="date" id="book-date" class="auth-input">
+      <label>Дата</label>
+      <div class="dp-wrap">
+        <button type="button" class="dp-trigger" id="book-date-trigger" onclick="toggleDatePicker(event)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a6fc4" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="book-date-label">Выберите дату</span>
+          <svg class="dp-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <input type="hidden" id="book-date">
+        <div id="dp-popup" class="dp-popup hidden">
+          <div class="dp-head">
+            <button type="button" class="dp-nav" id="dp-prev" aria-label="Назад"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span id="dp-title">—</span>
+            <button type="button" class="dp-nav" id="dp-next" aria-label="Вперёд"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
+          <div class="dp-weekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+          <div class="dp-grid" id="dp-grid"></div>
+        </div>
+      </div>
       <label>Время</label><input type="time" id="book-time" class="auth-input" value="12:00">
       <label>Количество гостей</label><input type="number" id="book-guests" class="auth-input" value="2" min="1" max="20">
       <label>Комментарий <span class="optional">(необязательно)</span></label>
@@ -313,6 +343,19 @@
     <div id="place-map-btns" class="map-btns-wrap"></div>
   </div>
   <div class="tab-content hidden" id="tab-bookings"><div id="bookings-list"></div></div>
+</div>
+
+<!-- BOOKING SUCCESS MODAL -->
+<div id="booking-success-modal" class="hidden modal-overlay" onclick="if(event.target===this)closeBookingSuccess()">
+  <div class="modal-box booking-success-box">
+    <div class="bs-check">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h3 class="bs-title">Бронь подтверждена!</h3>
+    <p class="bs-place" id="bs-place"></p>
+    <div class="bs-meta" id="bs-meta"></div>
+    <button class="auth-btn" onclick="closeBookingSuccess()" style="margin-top:18px">Готово</button>
+  </div>
 </div>
 
 <!-- MY PROFILE MODAL -->
