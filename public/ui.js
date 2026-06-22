@@ -40,11 +40,20 @@ function ensureSocket() {
 }
 
 // ─── HOME PAGE ───────────────────────────────────────────────────────────────
+let globeInited = false;
+async function loadGlobe() {
+  if (globeInited) return;
+  globeInited = true;
+  try { (await import('./home3d.js')).initHomeGlobe(); }
+  catch (e) { console.warn('3D globe failed to load:', e); }
+}
+
 function enterHome() {
   document.getElementById('auth-overlay').style.display = 'none';
   document.getElementById('game-ui').style.display = 'none';
   document.getElementById('home-page').style.display = '';
   ensureSocket();
+  loadGlobe();
   loadHomeData();
   startOnlinePolling();
 }
@@ -80,49 +89,24 @@ async function loadHomeData() {
 }
 
 function renderHomeProfile(data) {
-  const av = document.getElementById('home-avatar');
-  av.innerHTML = data.photo
+  const av = document.getElementById('lp-avatar');
+  if (av) av.innerHTML = data.photo
     ? `<img src="/uploads/${data.photo}" alt="">`
-    : `<span>${(data.fullname || '?')[0].toUpperCase()}</span>`;
+    : `${(data.fullname || '?')[0].toUpperCase()}`;
   const hour = new Date().getHours();
   const greet = hour < 6 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
   const firstName = (data.fullname || '').split(' ')[0] || '';
-  document.getElementById('home-greeting').textContent = `${greet}, ${firstName} 👋`;
-  document.getElementById('home-name').textContent = data.fullname || '';
-  const age = data.birthyear ? (new Date().getFullYear() - data.birthyear) + ' лет' : '';
-  document.getElementById('home-sub').innerHTML = `${data.gender === 'female' ? 'Женский' : 'Мужской'}${age ? ' · ' + age : ''}`;
+  const g = document.getElementById('lp-greeting');
+  if (g) g.textContent = `${greet}, ${firstName} 👋`;
 }
 
 async function loadHomeFriends() {
-  const list = document.getElementById('home-friends-list');
-  list.innerHTML = '<div class="home-friends-loading">Загрузка...</div>';
   try {
     const friends = await fetch('/api/friends').then(r => r.json());
     animateCount(document.getElementById('home-friends-count'), friends.length);
     animateCount(document.getElementById('home-friends-online'), friends.filter(f => f.online).length);
-    if (!friends.length) {
-      list.innerHTML = `<div class="home-friends-empty">${icon('users', 30)}<p>Пока нет друзей</p><span>Знакомьтесь с людьми на карте и добавляйте в друзья</span></div>`;
-      return;
-    }
-    // онлайн сначала
-    friends.sort((a, b) => (b.online - a.online));
-    list.innerHTML = friends.map(f => `
-      <div class="home-friend ${f.online ? 'online' : ''}" onclick="openFriendFromHome('${f.id}', '${escapeHtml(f.fullname).replace(/'/g, "\\'")}')">
-        <div class="home-friend-avatar">
-          ${f.photo ? `<img src="/uploads/${f.photo}" alt="">` : `<span>${(f.fullname || '?')[0].toUpperCase()}</span>`}
-          ${f.online ? '<i class="home-friend-dot"></i>' : ''}
-        </div>
-        <div class="home-friend-name">${escapeHtml((f.fullname || '').split(' ')[0])}</div>
-        <div class="home-friend-status">${f.online ? 'в сети' : 'не в сети'}</div>
-      </div>`).join('');
-  } catch {
-    list.innerHTML = '<div class="home-friends-loading" style="color:#f88">Ошибка загрузки</div>';
-  }
+  } catch {}
 }
-
-window.openFriendFromHome = function (userId, name) {
-  openProfileModal(userId);
-};
 
 // ─── PEOPLE LIST MODAL (online / friends) ──────────────────────────────────────
 function peopleAvatar(p, big) {
@@ -454,7 +438,7 @@ window.submitBooking = async function () {
   try {
     const res = await fetch('/api/bookings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ place_id: openPlaceData.id, date, time, guests, comment })
+      body: JSON.stringify({ place_id: openPlaceData.id, place_name: openPlaceData.name, date, time, guests, comment })
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'Ошибка', 'error'); btn.disabled = false; btn.textContent = 'Забронировать'; return; }
@@ -665,6 +649,8 @@ window.handleNotification = function (data) {
     const chatOpen = privateChatUserId === data.fromId &&
       !document.getElementById('private-chat').classList.contains('hidden');
     if (!chatOpen) showToast(`💬 ${data.fromName}: ${(data.content || '').slice(0, 40)}`, 'info', 5000);
+  } else if (data.type === 'booking') {
+    showToast(`📅 ${data.fromName} забронировал(а) «${data.placeName}»`, 'info', 5000);
   }
   // обновим список друзей на главной (статусы/онлайн)
   if (document.getElementById('home-page').style.display !== 'none' && data.type === 'friend_request') loadHomeFriends();
@@ -679,6 +665,15 @@ window.toggleNotifications = async function () {
     window.setNotifCount(r.count || 0);   // могут остаться непрочитанные сообщения
   } catch { window.setNotifCount(0); }
 };
+
+// Закрывать панель уведомлений по клику вне её (и при открытии других окон)
+document.addEventListener('click', e => {
+  const panel = document.getElementById('notif-panel');
+  if (!panel || panel.classList.contains('hidden')) return;
+  if (panel.contains(e.target)) return;
+  if (e.target.closest && (e.target.closest('#home-notif-btn') || e.target.closest('#notif-btn'))) return;
+  panel.classList.add('hidden');
+});
 
 async function loadNotifications() {
   const list = document.getElementById('notif-list');
@@ -703,6 +698,14 @@ async function loadNotifications() {
         return `<div class="notif-item ${n.read ? '' : 'unread'}">
           <div class="notif-avatar-placeholder">${icon('check_sm', 16, '#22c55e')}</div>
           <div class="notif-body"><div class="notif-text"><b>${d.fromName}</b> принял(а) вашу заявку в друзья</div></div>
+        </div>`;
+      } else if (n.type === 'booking') {
+        return `<div class="notif-item ${n.read ? '' : 'unread'}">
+          ${d.fromPhoto ? `<img src="/uploads/${d.fromPhoto}" class="notif-avatar">` : `<div class="notif-avatar-placeholder">${(d.fromName || '?')[0]}</div>`}
+          <div class="notif-body">
+            <div class="notif-text"><b>${escapeHtml(d.fromName || '')}</b> забронировал(а) <b>«${escapeHtml(d.placeName || '')}»</b></div>
+            <div class="notif-msg-preview">${icon('calendar', 13)} ${d.date || ''} · ${icon('clock', 13)} ${d.time || ''}</div>
+          </div>
         </div>`;
       } else if (n.type === 'message') {
         const safeName = escapeHtml(d.fromName || '');

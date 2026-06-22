@@ -111,11 +111,15 @@ app.get('/api/menu/:name', (req, res) => res.json(menus[decodeURIComponent(req.p
 // ─── BOOKINGS ────────────────────────────────────────────────────────────────
 
 app.post('/api/bookings', requireAuth, (req, res) => {
-  const { place_id, date, time, guests, comment } = req.body;
+  const { place_id, place_name, date, time, guests, comment } = req.body;
   if (!place_id || !date || !time) return res.status(400).json({ error: 'Укажите дату и время' });
   const id = uuid();
   db.prepare('INSERT INTO bookings (id,place_id,user_id,date,time,guests,comment) VALUES (?,?,?,?,?,?,?)')
     .run(id, place_id, req.session.userId, date, time, parseInt(guests) || 1, comment || '');
+  // уведомить друзей о брони
+  const me = db.prepare('SELECT fullname,photo FROM users WHERE id=?').get(req.session.userId);
+  const data = { fromId: req.session.userId, fromName: me.fullname, fromPhoto: me.photo, placeName: place_name || 'заведение', date, time };
+  for (const fid of getFriendIds(req.session.userId)) notify(fid, 'booking', data);
   res.json({ ok: true, id });
 });
 
@@ -275,6 +279,19 @@ const unreadCount = userId => {
   return n + m;
 };
 const emitCount = userId => { const ts = onlineUsers.get(userId); if (ts) io.to(ts).emit('notifCount', unreadCount(userId)); };
+
+// id всех друзей пользователя (принятые заявки)
+const getFriendIds = userId => db.prepare(`
+  SELECT CASE WHEN from_id=? THEN to_id ELSE from_id END AS id
+  FROM friend_requests WHERE status='accepted' AND (from_id=? OR to_id=?)`).all(userId, userId, userId).map(r => r.id);
+
+// создать уведомление + доставить онлайн + обновить счётчик
+const notify = (userId, type, data) => {
+  db.prepare('INSERT INTO notifications (id,user_id,type,data) VALUES (?,?,?,?)').run(uuid(), userId, type, JSON.stringify(data));
+  const ts = onlineUsers.get(userId);
+  if (ts) io.to(ts).emit('notification', { type, ...data });
+  emitCount(userId);
+};
 
 io.on('connection', s => {
   players[s.id] = { id: s.id, name: `Гость-${s.id.slice(0, 4)}`, x: 0, z: 10, rotationY: 0, userId: null, photo: null, gender: null };
