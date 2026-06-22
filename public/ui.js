@@ -10,21 +10,238 @@ let activePlaceTab = 'info';
 let openPlaceData = null;
 let privateChatUserId = null;
 let notifCount = 0;
+let worldInited = false;
+let onlinePollTimer = null;
 
 // ─── INIT ──────────────────────────────────────────────────────────────────────
 async function init() {
   const { user } = await fetch('/auth/me').then(r => r.json());
   if (user) {
     currentUser = user;
-    enterGame();
+    enterHome();
   } else {
     showAuth();
   }
 }
 
+// ─── SHARED SOCKET ──────────────────────────────────────────────────────────
+// Подключаемся сразу после входа (с главной), чтобы уведомления, онлайн-статус
+// и личные сообщения работали ещё до входа на карту. Игра (main.js) переиспользует
+// этот же сокет.
+function ensureSocket() {
+  if (window._skverSocket || !currentUser) return window._skverSocket;
+  const socket = io({ transports: ['polling', 'websocket'], reconnection: true });
+  window._skverSocket = socket;
+  socket.on('connect', () => socket.emit('identify', currentUser.id));
+  socket.on('notification', d => window.handleNotification && window.handleNotification(d));
+  socket.on('notifCount', n => window.setNotifCount && window.setNotifCount(n));
+  socket.on('privateMessage', m => window.handlePrivateMessage && window.handlePrivateMessage(m));
+  return socket;
+}
+
+// ─── HOME PAGE ───────────────────────────────────────────────────────────────
+function enterHome() {
+  document.getElementById('auth-overlay').style.display = 'none';
+  document.getElementById('game-ui').style.display = 'none';
+  document.getElementById('home-page').style.display = '';
+  ensureSocket();
+  loadHomeData();
+  startOnlinePolling();
+}
+
+// плавный счётчик чисел (wow-эффект)
+function animateCount(el, to) {
+  if (!el) return;
+  to = Math.max(0, to | 0);
+  const from = parseInt(el.textContent, 10) || 0;
+  if (from === to) { el.textContent = to; return; }
+  const dur = 650, start = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - start) / dur);
+    el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - t, 3)));
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+async function loadHomeData() {
+  // профиль
+  try {
+    const data = await fetch('/api/profile/me').then(r => r.json());
+    if (data && data.id) {
+      currentUser = data;
+      renderHomeProfile(data);
+    }
+  } catch {}
+  // друзья + онлайн + уведомления параллельно
+  loadHomeFriends();
+  refreshOnlineCount();
+  refreshNotifCount();
+}
+
+function renderHomeProfile(data) {
+  const av = document.getElementById('home-avatar');
+  av.innerHTML = data.photo
+    ? `<img src="/uploads/${data.photo}" alt="">`
+    : `<span>${(data.fullname || '?')[0].toUpperCase()}</span>`;
+  const hour = new Date().getHours();
+  const greet = hour < 6 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
+  const firstName = (data.fullname || '').split(' ')[0] || '';
+  document.getElementById('home-greeting').textContent = `${greet}, ${firstName} 👋`;
+  document.getElementById('home-name').textContent = data.fullname || '';
+  const age = data.birthyear ? (new Date().getFullYear() - data.birthyear) + ' лет' : '';
+  document.getElementById('home-sub').innerHTML = `${data.gender === 'female' ? 'Женский' : 'Мужской'}${age ? ' · ' + age : ''}`;
+}
+
+async function loadHomeFriends() {
+  const list = document.getElementById('home-friends-list');
+  list.innerHTML = '<div class="home-friends-loading">Загрузка...</div>';
+  try {
+    const friends = await fetch('/api/friends').then(r => r.json());
+    animateCount(document.getElementById('home-friends-count'), friends.length);
+    animateCount(document.getElementById('home-friends-online'), friends.filter(f => f.online).length);
+    if (!friends.length) {
+      list.innerHTML = `<div class="home-friends-empty">${icon('users', 30)}<p>Пока нет друзей</p><span>Знакомьтесь с людьми на карте и добавляйте в друзья</span></div>`;
+      return;
+    }
+    // онлайн сначала
+    friends.sort((a, b) => (b.online - a.online));
+    list.innerHTML = friends.map(f => `
+      <div class="home-friend ${f.online ? 'online' : ''}" onclick="openFriendFromHome('${f.id}', '${escapeHtml(f.fullname).replace(/'/g, "\\'")}')">
+        <div class="home-friend-avatar">
+          ${f.photo ? `<img src="/uploads/${f.photo}" alt="">` : `<span>${(f.fullname || '?')[0].toUpperCase()}</span>`}
+          ${f.online ? '<i class="home-friend-dot"></i>' : ''}
+        </div>
+        <div class="home-friend-name">${escapeHtml((f.fullname || '').split(' ')[0])}</div>
+        <div class="home-friend-status">${f.online ? 'в сети' : 'не в сети'}</div>
+      </div>`).join('');
+  } catch {
+    list.innerHTML = '<div class="home-friends-loading" style="color:#f88">Ошибка загрузки</div>';
+  }
+}
+
+window.openFriendFromHome = function (userId, name) {
+  openProfileModal(userId);
+};
+
+// ─── PEOPLE LIST MODAL (online / friends) ──────────────────────────────────────
+function peopleAvatar(p, big) {
+  const s = big ? 48 : 48;
+  return p.photo
+    ? `<img src="/uploads/${p.photo}" class="people-avatar" alt="">`
+    : `<div class="people-avatar people-avatar-ph">${(p.fullname || '?')[0].toUpperCase()}</div>`;
+}
+
+function renderPeopleRows(people, opts = {}) {
+  return people.map(p => {
+    const me = p.id === currentUser?.id;
+    const age = p.birthyear ? (new Date().getFullYear() - p.birthyear) + ' лет' : '';
+    const sub = me ? 'это вы' : [p.gender === 'female' ? 'Женский' : 'Мужской', age].filter(Boolean).join(' · ');
+    const online = opts.allOnline || p.online;
+    return `
+      <div class="people-row${me ? ' me' : ''}" ${me ? '' : `onclick="closePeopleModal();openProfileModal('${p.id}')"`}>
+        <div class="people-av-wrap">
+          ${peopleAvatar(p)}
+          ${online ? '<i class="people-dot"></i>' : ''}
+        </div>
+        <div class="people-info">
+          <div class="people-name">${escapeHtml(p.fullname || '')}${me ? '' : ''}</div>
+          <div class="people-sub ${online ? 'on' : ''}">${online ? ('🟢 в сквере' + (me ? ' · это вы' : '')) : sub}</div>
+        </div>
+        ${me ? '' : `<svg class="people-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`}
+      </div>`;
+  }).join('');
+}
+
+window.closePeopleModal = function () { document.getElementById('people-modal').classList.add('hidden'); };
+
+window.openOnlineList = async function () {
+  const modal = document.getElementById('people-modal');
+  modal.classList.remove('hidden');
+  document.getElementById('people-title-text').textContent = 'Сейчас в сквере';
+  const listEl = document.getElementById('people-list');
+  document.getElementById('people-count').textContent = '';
+  listEl.innerHTML = '<div class="people-loading">Загрузка...</div>';
+  try {
+    const { users, guests, total } = await fetch('/api/online/list').then(r => r.json());
+    document.getElementById('people-count').textContent = total || 0;
+    let html = '';
+    if (users.length) html += renderPeopleRows(users, { allOnline: true });
+    if (guests > 0) {
+      html += `<div class="people-guests">${icon('users', 16)} +${guests} ${guests === 1 ? 'гость' : 'гостей'} (без профиля)</div>`;
+    }
+    if (!html) html = `<div class="people-empty">${icon('users', 32)}<p>Пока никого нет</p><span>Будьте первым на карте!</span></div>`;
+    listEl.innerHTML = html;
+  } catch { listEl.innerHTML = '<div class="people-loading" style="color:#e74c3c">Ошибка загрузки</div>'; }
+};
+
+window.openFriendsList = async function (onlyOnline = false) {
+  const modal = document.getElementById('people-modal');
+  modal.classList.remove('hidden');
+  document.getElementById('people-title-text').textContent = onlyOnline ? 'Друзья онлайн' : 'Мои друзья';
+  const listEl = document.getElementById('people-list');
+  document.getElementById('people-count').textContent = '';
+  listEl.innerHTML = '<div class="people-loading">Загрузка...</div>';
+  try {
+    let friends = await fetch('/api/friends').then(r => r.json());
+    if (onlyOnline) friends = friends.filter(f => f.online);
+    friends.sort((a, b) => (b.online - a.online) || a.fullname.localeCompare(b.fullname));
+    document.getElementById('people-count').textContent = friends.length;
+    if (!friends.length) {
+      listEl.innerHTML = `<div class="people-empty">${icon('users', 32)}<p>${onlyOnline ? 'Нет друзей онлайн' : 'Пока нет друзей'}</p><span>${onlyOnline ? 'Загляните позже' : 'Знакомьтесь на карте и добавляйте в друзья'}</span></div>`;
+      return;
+    }
+    listEl.innerHTML = renderPeopleRows(friends);
+  } catch { listEl.innerHTML = '<div class="people-loading" style="color:#e74c3c">Ошибка загрузки</div>'; }
+};
+
+async function refreshOnlineCount() {
+  try {
+    const { total } = await fetch('/api/online').then(r => r.json());
+    animateCount(document.getElementById('home-online-count'), total || 0);
+  } catch {}
+}
+
+async function refreshNotifCount() {
+  try {
+    const { count } = await fetch('/api/notifications/count').then(r => r.json());
+    window.setNotifCount(count || 0);
+  } catch {}
+}
+
+function startOnlinePolling() {
+  stopOnlinePolling();
+  onlinePollTimer = setInterval(() => {
+    if (document.getElementById('home-page').style.display === 'none') return;
+    refreshOnlineCount();
+    loadHomeFriends();
+  }, 12000);
+}
+function stopOnlinePolling() { if (onlinePollTimer) { clearInterval(onlinePollTimer); onlinePollTimer = null; } }
+
+window.enterGameFromHome = function () {
+  document.getElementById('home-page').style.display = 'none';
+  enterGame();
+};
+
+window.goHome = function () {
+  document.getElementById('game-ui').style.display = 'none';
+  document.getElementById('notif-panel').classList.add('hidden');
+  enterHome();
+};
+
+window.logout = async function () {
+  try { await fetch('/auth/logout', { method: 'POST' }); } catch {}
+  location.reload();
+};
+
 async function enterGame() {
   document.getElementById('auth-overlay').style.display = 'none';
+  document.getElementById('home-page').style.display = 'none';
   document.getElementById('game-ui').style.display = '';
+  stopOnlinePolling();
+  if (worldInited) return;      // мир инициализируется только один раз
+  worldInited = true;
   const { initWorld } = await import('./main.js');
   initWorld(currentUser);
   bindGameUI();
@@ -122,7 +339,7 @@ window.submitRegister = async function () {
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'Ошибка', 'error'); btn.disabled = false; btn.textContent = 'Создать аккаунт'; return; }
     currentUser = data.user;
-    enterGame();
+    enterHome();
   } catch (e) { showToast('Ошибка сети', 'error'); btn.disabled = false; btn.textContent = 'Создать аккаунт'; }
 };
 
@@ -137,7 +354,7 @@ window.submitLogin = async function () {
     const data = await res.json();
     if (!res.ok) { document.getElementById('login-error').textContent = data.error || 'Ошибка'; btn.disabled = false; btn.textContent = 'Войти'; return; }
     currentUser = data.user;
-    enterGame();
+    enterHome();
   } catch (e) { document.getElementById('login-error').textContent = 'Ошибка сети'; btn.disabled = false; btn.textContent = 'Войти'; }
 };
 
@@ -428,26 +645,39 @@ window.saveMyProfile = async function () {
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 window.setNotifCount = function (n) {
   notifCount = n;
-  const badge = document.getElementById('notif-badge');
-  badge.textContent = n;
-  badge.style.display = n > 0 ? '' : 'none';
+  for (const id of ['notif-badge', 'home-notif-badge']) {
+    const badge = document.getElementById(id);
+    if (!badge) continue;
+    badge.textContent = n;
+    badge.style.display = n > 0 ? '' : 'none';
+  }
 };
 
 window.handleNotification = function (data) {
-  window.setNotifCount(notifCount + 1);
+  // Счётчик обновляется сервером через событие 'notifCount' — здесь только тосты/UI
   if (data.type === 'friend_request') {
     showToast(`${data.fromName} хочет добавить вас в друзья`, 'info', 5000);
   } else if (data.type === 'friend_accepted') {
     showToast(`${data.fromName} принял(а) вашу заявку!`, 'success');
+    if (document.getElementById('home-page').style.display !== 'none') loadHomeFriends();
+  } else if (data.type === 'message') {
+    // не показываем тост, если открыт чат именно с этим человеком
+    const chatOpen = privateChatUserId === data.fromId &&
+      !document.getElementById('private-chat').classList.contains('hidden');
+    if (!chatOpen) showToast(`💬 ${data.fromName}: ${(data.content || '').slice(0, 40)}`, 'info', 5000);
   }
+  // обновим список друзей на главной (статусы/онлайн)
+  if (document.getElementById('home-page').style.display !== 'none' && data.type === 'friend_request') loadHomeFriends();
 };
 
 window.toggleNotifications = async function () {
   const panel = document.getElementById('notif-panel');
   if (panel.classList.toggle('hidden')) return;
   await loadNotifications();
-  await fetch('/api/notifications/read', { method: 'POST' });
-  window.setNotifCount(0);
+  try {
+    const r = await fetch('/api/notifications/read', { method: 'POST' }).then(r => r.json());
+    window.setNotifCount(r.count || 0);   // могут остаться непрочитанные сообщения
+  } catch { window.setNotifCount(0); }
 };
 
 async function loadNotifications() {
@@ -473,6 +703,15 @@ async function loadNotifications() {
         return `<div class="notif-item ${n.read ? '' : 'unread'}">
           <div class="notif-avatar-placeholder">${icon('check_sm', 16, '#22c55e')}</div>
           <div class="notif-body"><div class="notif-text"><b>${d.fromName}</b> принял(а) вашу заявку в друзья</div></div>
+        </div>`;
+      } else if (n.type === 'message') {
+        const safeName = escapeHtml(d.fromName || '');
+        return `<div class="notif-item ${n.read ? '' : 'unread'}" style="cursor:pointer" onclick="toggleNotifications();openPrivateChat('${d.fromId}','${safeName.replace(/'/g, "\\'")}')">
+          ${d.fromPhoto ? `<img src="/uploads/${d.fromPhoto}" class="notif-avatar">` : `<div class="notif-avatar-placeholder">${(d.fromName || '?')[0]}</div>`}
+          <div class="notif-body">
+            <div class="notif-text"><b>${safeName}</b> ${d.count > 1 ? `· ${d.count} сообщ.` : ''}</div>
+            <div class="notif-msg-preview">${escapeHtml((d.content || '').slice(0, 60))}</div>
+          </div>
         </div>`;
       }
       return '';
@@ -526,13 +765,12 @@ window.sendPrivateMessage = function () {
 };
 
 window.handlePrivateMessage = function (msg) {
+  // Показываем в открытом чате; тост о новом сообщении приходит отдельным
+  // событием 'notification' (type: message), счётчик ведёт сервер.
   if (msg.fromId === privateChatUserId || (msg.fromId === currentUser?.id && msg.toId === privateChatUserId)) {
     appendPrivateMessage(msg);
     const log = document.getElementById('pchat-log');
     log.scrollTop = log.scrollHeight;
-  } else if (msg.fromId !== currentUser?.id) {
-    showToast(`${msg.fullname}: ${msg.content.slice(0, 40)}`, 'info', 5000);
-    window.setNotifCount(notifCount + 1);
   }
 };
 

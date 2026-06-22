@@ -4,7 +4,9 @@ import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { places } from './places.js';
 
 export function initWorld(currentUser) {
-  const socket = io({ transports: ['polling', 'websocket'], reconnection: true });
+  // Переиспользуем сокет, открытый ещё на главной странице (ui.js)
+  const socket = window._skverSocket || io({ transports: ['polling', 'websocket'], reconnection: true });
+  window._skverSocket = socket;
   const statusEl = document.getElementById('avatar-status');
 
   // ─── SCENE ────────────────────────────────────────────────────────────────
@@ -1658,7 +1660,10 @@ export function initWorld(currentUser) {
   socket.on('connect', () => {
     myId = socket.id;
     socket.emit('identify', currentUser.id);
+    socket.emit('getPlayers');
   });
+  // Сокет уже мог подключиться на главной — берём снимок игроков сразу
+  if (socket.connected) { myId = socket.id; socket.emit('getPlayers'); }
   socket.on('currentPlayers', ps => { Object.values(ps).forEach(addRemote); onlineCount(); });
   socket.on('playerJoined', p => { addRemote(p); onlineCount(); });
   socket.on('playerMoved', p => {
@@ -1679,12 +1684,10 @@ export function initWorld(currentUser) {
     line.children[0].textContent = d.name; line.children[1].textContent = d.message;
     log.appendChild(line); log.scrollTop = log.scrollHeight;
   });
-  socket.on('notification', data => { window.handleNotification && window.handleNotification(data); });
-  socket.on('notifCount', n => { window.setNotifCount && window.setNotifCount(n); });
-  socket.on('privateMessage', msg => { window.handlePrivateMessage && window.handlePrivateMessage(msg); });
+  // Уведомления / счётчик / личные сообщения обрабатываются в ui.js (ensureSocket),
+  // т.к. сокет общий и подключается ещё на главной странице.
 
   // Expose socket and controls to UI
-  window._skverSocket = socket;
   window._skverMyId = () => myId;
   window._openNearest = openNearest;
 

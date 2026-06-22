@@ -132,6 +132,39 @@ app.get('/api/profile/me', requireAuth, (req, res) => {
   res.json(safeUser(u) || null);
 });
 
+// Сколько людей сейчас в сквере (на карте)
+app.get('/api/online', (req, res) => {
+  res.json({ total: Object.keys(players).length, registered: onlineUsers.size });
+});
+
+// Кто именно сейчас онлайн (в сквере) — список
+app.get('/api/online/list', requireAuth, (req, res) => {
+  const ids = [...onlineUsers.keys()];
+  const rows = ids.length
+    ? db.prepare(`SELECT id,fullname,photo,gender,birthyear FROM users WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids)
+    : [];
+  rows.sort((a, b) => a.fullname.localeCompare(b.fullname));
+  const guests = Math.max(0, Object.keys(players).length - onlineUsers.size);
+  res.json({ users: rows, guests, total: Object.keys(players).length });
+});
+
+// Список друзей (принятые заявки) + кто сейчас онлайн
+app.get('/api/friends', requireAuth, (req, res) => {
+  const me = req.session.userId;
+  const rows = db.prepare(`
+    SELECT u.id, u.fullname, u.photo, u.gender, u.birthyear
+    FROM friend_requests fr
+    JOIN users u ON u.id = (CASE WHEN fr.from_id=? THEN fr.to_id ELSE fr.from_id END)
+    WHERE fr.status='accepted' AND (fr.from_id=? OR fr.to_id=?)
+    ORDER BY u.fullname`).all(me, me, me);
+  res.json(rows.map(r => ({ ...r, online: onlineUsers.has(r.id) })));
+});
+
+// Кол-во непрочитанных (уведомления + сообщения)
+app.get('/api/notifications/count', requireAuth, (req, res) => {
+  res.json({ count: unreadCount(req.session.userId) });
+});
+
 app.get('/api/profile/:userId', requireAuth, (req, res) => {
   const u = db.prepare('SELECT id,gender,fullname,birthyear,photo FROM users WHERE id=?').get(req.params.userId);
   if (!u) return res.status(404).json({ error: 'Не найден' });
@@ -157,6 +190,7 @@ app.post('/api/friends/request/:targetId', requireAuth, (req, res) => {
     .run(nid, to, 'friend_request', JSON.stringify({ requestId: id, fromId: from, fromName: fu.fullname, fromPhoto: fu.photo }));
   const ts = onlineUsers.get(to);
   if (ts) io.to(ts).emit('notification', { type: 'friend_request', requestId: id, fromId: from, fromName: fu.fullname, fromPhoto: fu.photo });
+  emitCount(to);
   res.json({ ok: true });
 });
 
@@ -172,18 +206,31 @@ app.post('/api/friends/respond/:reqId', requireAuth, (req, res) => {
       .run(nid, fr.from_id, 'friend_accepted', JSON.stringify({ fromId: req.session.userId, fromName: me.fullname }));
     const ts = onlineUsers.get(fr.from_id);
     if (ts) io.to(ts).emit('notification', { type: 'friend_accepted', fromId: req.session.userId, fromName: me.fullname });
+    emitCount(fr.from_id);
   }
   res.json({ ok: true });
 });
 
 app.get('/api/notifications', requireAuth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50').all(req.session.userId);
-  res.json(rows.map(n => ({ ...n, data: JSON.parse(n.data) })));
+  const me = req.session.userId;
+  const rows = db.prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50').all(me)
+    .map(n => ({ id: n.id, type: n.type, read: n.read, created_at: n.created_at, data: JSON.parse(n.data) }));
+  // Непрочитанные сообщения, сгруппированные по отправителю
+  const msgs = db.prepare(`
+    SELECT m.from_id, u.fullname, u.photo, COUNT(*) cnt, MAX(m.created_at) created_at,
+      (SELECT content FROM messages WHERE from_id=m.from_id AND to_id=? AND read=0 ORDER BY created_at DESC LIMIT 1) last
+    FROM messages m JOIN users u ON u.id=m.from_id
+    WHERE m.to_id=? AND m.read=0 GROUP BY m.from_id`).all(me, me);
+  const msgItems = msgs.map(r => ({
+    id: 'msg-' + r.from_id, type: 'message', read: 0, created_at: r.created_at,
+    data: { fromId: r.from_id, fromName: r.fullname, fromPhoto: r.photo, content: r.last, count: r.cnt }
+  }));
+  res.json([...rows, ...msgItems].sort((a, b) => b.created_at - a.created_at));
 });
 
 app.post('/api/notifications/read', requireAuth, (req, res) => {
   db.prepare('UPDATE notifications SET read=1 WHERE user_id=?').run(req.session.userId);
-  res.json({ ok: true });
+  res.json({ ok: true, count: unreadCount(req.session.userId) });
 });
 
 // ─── PROFILE EDIT ────────────────────────────────────────────────────────────
@@ -210,6 +257,7 @@ app.get('/api/messages/:userId', requireAuth, (req, res) => {
     WHERE (m.from_id=? AND m.to_id=?) OR (m.from_id=? AND m.to_id=?) ORDER BY m.created_at ASC LIMIT 200`)
     .all(me, other, other, me);
   db.prepare('UPDATE messages SET read=1 WHERE to_id=? AND from_id=?').run(me, other);
+  emitCount(me);
   res.json(msgs);
 });
 
@@ -219,6 +267,14 @@ const players = {};
 const onlineUsers = new Map();
 const socketUsers = new Map();
 const safeName = v => String(v || 'Guest').trim().slice(0, 24) || 'Guest';
+
+// Непрочитанное = заявки/уведомления + входящие сообщения
+const unreadCount = userId => {
+  const n = db.prepare('SELECT COUNT(*) c FROM notifications WHERE user_id=? AND read=0').get(userId).c;
+  const m = db.prepare('SELECT COUNT(*) c FROM messages WHERE to_id=? AND read=0').get(userId).c;
+  return n + m;
+};
+const emitCount = userId => { const ts = onlineUsers.get(userId); if (ts) io.to(ts).emit('notifCount', unreadCount(userId)); };
 
 io.on('connection', s => {
   players[s.id] = { id: s.id, name: `Гость-${s.id.slice(0, 4)}`, x: 0, z: 10, rotationY: 0, userId: null, photo: null, gender: null };
@@ -236,9 +292,11 @@ io.on('connection', s => {
     onlineUsers.set(u.id, s.id);
     socketUsers.set(s.id, u.id);
     io.emit('playerUpdated', players[s.id]);
-    const unread = db.prepare('SELECT COUNT(*) as n FROM notifications WHERE user_id=? AND read=0').get(u.id);
-    s.emit('notifCount', unread.n);
+    s.emit('notifCount', unreadCount(u.id));
   });
+
+  // Снимок текущих игроков (для сокета, подключившегося заранее — с главной страницы)
+  s.on('getPlayers', () => s.emit('currentPlayers', players));
 
   s.on('setName', n => { if (players[s.id]) { players[s.id].name = safeName(n); io.emit('playerUpdated', players[s.id]); } });
 
@@ -264,7 +322,11 @@ io.on('connection', s => {
     const msg = { id, fromId, toId: toUserId, content: text, fullname: fu.fullname, photo: fu.photo, created_at: Math.floor(Date.now() / 1000) };
     s.emit('privateMessage', msg);
     const ts = onlineUsers.get(toUserId);
-    if (ts) io.to(ts).emit('privateMessage', msg);
+    if (ts) {
+      io.to(ts).emit('privateMessage', msg);
+      io.to(ts).emit('notification', { type: 'message', fromId, fromName: fu.fullname, fromPhoto: fu.photo, content: text });
+    }
+    emitCount(toUserId);
   });
 
   s.on('disconnect', () => {
