@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Skver Tashkent</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/logo.svg">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
@@ -15,8 +17,7 @@
   <div class="auth-box">
 
     <div class="auth-logo">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10.5h2M13 10.5h2M9 14.5h2M13 14.5h2"/></svg>
-      Skver Tashkent
+      <span class="logo-word">Skver <b>Tashkent</b></span>
     </div>
 
     <h2 id="auth-title">Регистрация</h2>
@@ -163,8 +164,7 @@
   <!-- Top bar -->
   <header class="lp-topbar">
     <div class="lp-logo">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10.5h2M13 10.5h2M9 14.5h2M13 14.5h2"/></svg>
-      <span>Skver Tashkent</span>
+      <span class="logo-word">Skver <b>Tashkent</b></span>
     </div>
     <div class="lp-top-actions">
       <button class="lp-icon-btn" id="home-notif-btn" onclick="toggleNotifications()" title="Уведомления">
@@ -210,7 +210,7 @@
 <!-- GAME UI -->
 <div id="game-ui" style="display:none">
   <div id="hud">
-    <div class="brand">Skver Tashkent</div>
+    <div class="brand"><span class="logo-word">Skver <b>Tashkent</b></span></div>
     <div class="hint">WASD · Shift(бег) · E(открыть) · Клик на игрока — профиль</div>
     <div class="hud-row">
       <div id="nearby">Подойдите к объекту</div>

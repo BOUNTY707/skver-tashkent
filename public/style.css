@@ -22,7 +22,14 @@ button .ico, a .ico { pointer-events: none; }
   animation: authSlideIn .35s ease;
 }
 @keyframes authSlideIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
-.auth-logo { font-size: 22px; font-weight: 900; color: #1a3a5c; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.auth-logo { font-size: 22px; font-weight: 900; color: #15355c; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+
+/* ─── LOGO LOCKUP ─────────────────────────────────────────────────────────── */
+.logo-mark { display: block; flex-shrink: 0; filter: drop-shadow(0 3px 8px rgba(18,80,160,.32)); }
+.logo-word { font-weight: 900; letter-spacing: -.3px; }
+.logo-word b { font-weight: 900; }
+.auth-logo .logo-word b { color: #1d7ae0; }
+.lp-logo .logo-word b, .brand .logo-word b { color: #7dd3fc; }
 #auth-title { font-size: 24px; font-weight: 800; color: #1a2533; margin-bottom: 20px; }
 
 .steps-indicator { display: flex; align-items: center; margin-bottom: 24px; }
@@ -80,7 +87,7 @@ textarea.auth-input { resize: vertical; min-height: 60px; }
 
 /* ─── HUD ──────────────────────────────────────────────────────────────────── */
 #hud { position: fixed; top: 14px; left: 14px; z-index: 10; color: white; text-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; }
-.brand { font-size: 26px; font-weight: 900; letter-spacing: -.5px; }
+.brand { font-size: 24px; font-weight: 900; letter-spacing: -.5px; display: flex; align-items: center; gap: 9px; }
 .hint { font-size: 13px; margin-top: 3px; opacity: .85; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 #nearby, #online, #avatar-status { background: rgba(20,40,70,.7); backdrop-filter: blur(8px); border-radius: 12px; padding: 7px 12px; font-size: 12.5px; border: 1px solid rgba(255,255,255,.12); }
@@ -390,6 +397,7 @@ textarea.auth-input { resize: vertical; min-height: 60px; }
   /* HUD */
   #hud { top: 8px; left: 8px; }
   .brand { font-size: 18px; }
+  .brand .logo-mark { width: 22px; height: 22px; }
   .hint { display: none; }
   .hud-row { gap: 5px; margin-top: 5px; }
   #nearby, #online, #avatar-status { font-size: 11px; padding: 5px 9px; border-radius: 10px; }
