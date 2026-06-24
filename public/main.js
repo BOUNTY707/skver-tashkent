@@ -115,7 +115,7 @@ export function initWorld(currentUser) {
     const tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(8, 8);
     tx.colorSpace = THREE.SRGBColorSpace; return tx;
   }
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 48), new THREE.MeshStandardMaterial({ map: grassTex(), roughness: .95 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(84, 68), new THREE.MeshStandardMaterial({ map: grassTex(), roughness: .95 }));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
   // Sandy path
@@ -167,8 +167,10 @@ export function initWorld(currentUser) {
     return (
       (Math.abs(x + 15)   < 4.5 && Math.abs(z - 5.5)  < 4.0) ||
       (Math.abs(x + 8.8)  < 4.5 && Math.abs(z - 13)   < 4.0) ||
-      (Math.abs(x + 14)   < 6.0 && Math.abs(z + 12)   < 3.5) ||
-      (Math.abs(x - 13.5) < 5.0 && Math.abs(z + 10.5) < 4.0)
+      (Math.abs(x + 15)   < 6.0 && Math.abs(z + 13)   < 4.0) ||
+      (Math.abs(x - 13.5) < 5.0 && Math.abs(z + 10.5) < 4.0) ||
+      // football stadium — large footprint, keep trees/lamps off it
+      (Math.abs(x - 23)   < 9.5 && Math.abs(z - 6)    < 8.5)
     );
   }
   function onPath(x, z) {
@@ -186,11 +188,11 @@ export function initWorld(currentUser) {
     if (Math.hypot(x, z) < 6.1) return true;
     return false;
   }
-  // Inner ring (r=8.5) — yolak/fontan ustida bo'lmagan daraxtlar
+  // Inner ring (r=8.5) — yolak/fontan/bino ustida bo'lmagan daraxtlar
   for (let i = 0; i < 28; i++) {
     const a = i / 28 * Math.PI * 2;
     const tx = Math.cos(a) * 8.5, tz = Math.sin(a) * 8.5;
-    if (!onPath(tx, tz)) addTree(tx, tz, 0.88 + (i % 5) * 0.04);
+    if (!onPath(tx, tz) && !nearBuilding(tx, tz)) addTree(tx, tz, 0.88 + (i % 5) * 0.04);
   }
   // Outer ring (r=17.5) — bino yoki yolak ustida bo'lmagan daraxtlar
   for (let i = 0; i < 36; i++) {
@@ -198,11 +200,14 @@ export function initWorld(currentUser) {
     const tx = Math.cos(a) * 17.5, tz = Math.sin(a) * 17.5;
     if (!nearBuilding(tx, tz) && !onPath(tx, tz)) addTree(tx, tz, 1.08 + (i % 7) * 0.05);
   }
-  // Corner trees at scene boundary — no building conflicts
+  // Boundary trees framing the (enlarged) ground — skip stadium/buildings
   for (const [x, z, sc] of [
-    [-24, -19, 1.35], [24, -19, 1.40], [-24, 19, 1.38], [24, 19, 1.32],
-    [-24, 0, 1.30], [24, 0, 1.42], [0, -19, 1.36], [0, 19, 1.33],
-  ]) addTree(x, z, sc);
+    [-32, -26, 1.4], [0, -26, 1.36], [32, -26, 1.4],
+    [-32, 26, 1.4],  [0, 26, 1.36],  [32, 26, 1.4],
+    [-32, -13, 1.3], [-32, 0, 1.32], [-32, 13, 1.3],
+    [32, -13, 1.3],  [32, 0, 1.34],  [32, 13, 1.3],
+    [-18, -26, 1.28],[18, -26, 1.28],[-18, 26, 1.28],[18, 26, 1.28],
+  ]) { if (!nearBuilding(x, z)) addTree(x, z, sc); }
 
   // ─── BUSHES ───────────────────────────────────────────────────────────────
   function addBush(x, z, color = 0x2d8a2d) {
@@ -235,6 +240,7 @@ export function initWorld(currentUser) {
 
   // ─── BENCHES ──────────────────────────────────────────────────────────────
   function addBench(x, z, ry = 0) {
+    if (nearBuilding(x, z)) return; // bino/stadion ustiga skameyka qo'yilmaydi
     const g = new THREE.Group();
     box(g, 1.6, .09, .5, 0, .48, 0, mat(0x8b5e3c, .9));
     box(g, 1.6, .5, .07, 0, .76, -.22, mat(0x8b5e3c, .9));
@@ -348,11 +354,12 @@ export function initWorld(currentUser) {
   // Inner lamps — 8 ta, yo'laklar orasidagi bo'sh joylarda (22.5° offset)
   for (let i = 0; i < 8; i++) {
     const a = (i / 8 * Math.PI * 2) + Math.PI / 8; // 22.5° dan boshlaydi
-    addLamp(Math.cos(a) * 7.5, Math.sin(a) * 7.5);
+    const lx = Math.cos(a) * 7.5, lz = Math.sin(a) * 7.5;
+    if (!nearBuilding(lx, lz)) addLamp(lx, lz);
   }
-  // Tashqi chiroqlar — yolakda emas, o'zgarishsiz
-  for (const [x, z] of [[-5, -17], [5, -17], [-5, 17], [5, 17], [-17, -5], [-17, 5], [17, -5], [17, 5]]) {
-    addLamp(x, z);
+  // Tashqi chiroqlar — kattalashgan maydonni yoritadi, stadion ustiga tushmaydi
+  for (const [x, z] of [[-6, -20], [6, -20], [-6, 20], [6, 20], [-20, -6], [-20, 6], [20, -6], [20, 6]]) {
+    if (!nearBuilding(x, z)) addLamp(x, z);
   }
 
   // ─── FOUNTAIN ────────────────────────────────────────────────────────────
@@ -424,13 +431,68 @@ export function initWorld(currentUser) {
     label(fp.name, fp.x, 3.4, fp.z, '#1689bd', 3.2);
   }
 
+  // ─── GLB-BASED PLACES (real uploaded models) ─────────────────────────────
+  // Loads an external .glb, auto-fits it to the place footprint, drops it on
+  // the ground, orients it, and registers it as an interactive/clickable place.
+  function addModelPlace(p, g) {
+    const fit = p.modelFit || Math.max(...p.size);   // target max horizontal size
+    const placeLabel = topY =>
+      label(p.name, p.x, topY + 1.4, p.z, '#2a3a50', Math.min(Math.max(p.size[0], 4), 6));
+    new GLTFLoader().load(`./assets/models/${p.model}`, gltf => {
+      const model = gltf.scene;
+      // shadows + double-sided materials
+      model.traverse(o => {
+        if (o.isMesh) {
+          o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+          const ms = Array.isArray(o.material) ? o.material : [o.material];
+          ms.forEach(m => { if (m) { m.side = THREE.DoubleSide; m.needsUpdate = true; } });
+        }
+      });
+      if (p.modelRotY) model.rotation.y = p.modelRotY;
+      model.updateMatrixWorld(true);
+      // measure → uniform scale so largest horizontal extent == fit
+      let b = new THREE.Box3().setFromObject(model);
+      const s = new THREE.Vector3(); b.getSize(s);
+      const span = Math.max(s.x, s.z) || s.y || 1;
+      const scale = fit / span;
+      model.scale.multiplyScalar(scale);
+      model.updateMatrixWorld(true);
+      // re-measure → center on X/Z, sit bottom on the ground
+      b = new THREE.Box3().setFromObject(model);
+      const c = new THREE.Vector3(); b.getCenter(c);
+      model.position.x -= c.x;
+      model.position.z -= c.z;
+      model.position.y -= b.min.y - (p.modelYOffset || 0);
+      g.add(model);
+      // label sits just above the model's true (fitted) top — not p.size
+      g.updateMatrixWorld(true);
+      const topY = new THREE.Box3().setFromObject(model).max.y;
+      placeLabel(topY);
+    }, undefined, err => {
+      console.error(`Не удалось загрузить модель ${p.model}`, err);
+      // fallback box so the spot is still clickable
+      const [w, h, d] = p.size;
+      const fb = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+        mat('#' + p.color.toString(16).padStart(6, '0'), .9));
+      fb.position.y = h / 2; fb.castShadow = true; fb.receiveShadow = true;
+      g.add(fb);
+      placeLabel(h);
+    });
+    // register the whole group as interactive immediately (recursive raycast
+    // walks up to find userData.place, so children added later still resolve)
+    g.userData.place = p;
+    interactive.push(g);
+  }
+
   // ─── BUILDINGS ───────────────────────────────────────────────────────────
   for (const p of places) {
     if (p.kind === 'fountain') continue; // handled above
     const g = new THREE.Group();
     const [w, h, d] = p.size;
 
-    if (p.kind === 'monument') {
+    if (p.model) {
+      addModelPlace(p, g);
+    } else if (p.kind === 'monument') {
       // ── Materials ──────────────────────────────────────────────────────────
       const brnz = (c, r) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: .44 });
       const stM  = c => mat(c, .82);
@@ -1381,6 +1443,7 @@ export function initWorld(currentUser) {
     keys[e.key.toLowerCase()] = true;
     if (e.key === 'Enter') chatInput.focus();
     if (e.key.toLowerCase() === 'e') openNearest();
+    if (e.key.toLowerCase() === 'v') toggleCamView();
     if (e.key === '[') { stepPower = Math.max(.4, stepPower - .1); statusEl.textContent = `Шаг: ${stepPower.toFixed(1)}`; }
     if (e.key === ']') { stepPower = Math.min(1.8, stepPower + .1); statusEl.textContent = `Шаг: ${stepPower.toFixed(1)}`; }
   });
@@ -1448,8 +1511,8 @@ export function initWorld(currentUser) {
     if (m) {
       d.normalize();
       player.position.addScaledVector(d, (keys.shift ? 7.8 : 4.6) * dt);
-      player.position.x = THREE.MathUtils.clamp(player.position.x, -23, 23);
-      player.position.z = THREE.MathUtils.clamp(player.position.z, -18, 18);
+      player.position.x = THREE.MathUtils.clamp(player.position.x, -31, 31);
+      player.position.z = THREE.MathUtils.clamp(player.position.z, -23, 23);
       player.rotation.y = Math.atan2(d.x, d.z);
     }
     proceduralWalk(player, m, keys.shift, dt);
@@ -1507,8 +1570,24 @@ export function initWorld(currentUser) {
   // ─── CAMERA — orbit with right-click drag ────────────────────────────────
   let camYaw   = Math.atan2(11, 17);          // initial horizontal angle ≈ 33°
   let camPitch = Math.atan2(16, Math.hypot(11, 17)); // initial vertical ≈ 38°
-  const CAM_R  = 22;
+  // Two view presets: 0 = far (обзор), 1 = near (крупный план). Toggle with V / button.
+  const CAM_VIEWS = [
+    { dist: 22, pitch: Math.atan2(16, Math.hypot(11, 17)) }, // далёкий обзор (как сейчас)
+    { dist: 8,  pitch: 0.34 },                               // вид вблизи
+  ];
+  let camView = 0;
+  let CAM_R   = CAM_VIEWS[0].dist;
   const _camTarget = new THREE.Vector3();
+
+  function toggleCamView() {
+    camView = (camView + 1) % CAM_VIEWS.length;
+    CAM_R = CAM_VIEWS[camView].dist;
+    camPitch = CAM_VIEWS[camView].pitch; // yaw сохраняется, позиция плавно долетит (lerp)
+    const btn = document.getElementById('cam-btn');
+    if (btn) btn.title = camView === 0 ? 'Вид: обзор (нажмите — крупный план)' : 'Вид: крупный план (нажмите — обзор)';
+    if (statusEl) statusEl.textContent = camView === 0 ? 'Камера: обзор' : 'Камера: вблизи';
+  }
+  window._toggleCamView = toggleCamView;
 
   // Left-click drag → orbit  (click without move → raycasting kept)
   let _rDrag = false, _rMoved = false, _rLastX = 0, _rLastY = 0;
