@@ -22,7 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'data/uploads')));
 
 const sessionMiddleware = session({
-  secret: 'skver-tashkent-2024',
+  secret: process.env.SESSION_SECRET || 'skver-tashkent-2024',
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
